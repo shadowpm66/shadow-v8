@@ -53,6 +53,14 @@ The +9.16R result comes from a hand-built synthetic candle fixture designed to p
 
 The replay layer now includes gate analytics (`schema_version=1.5.0`) so skipped setups and trades can be reviewed by gate status, blocker, watch reason, warning, and confirmation. Gate status now separates `BLOCK`, `WATCH`, and `ALLOW`, which lets replay distinguish invalid setups from developing setups that should be monitored. The next safe improvement is to run real historical CSV data, starting with ETHUSDT 15m, and use the gate analytics to tune overly strict or overly loose strategy rules before live execution.
 
+Replay validation can be run against one CSV file or a folder of CSV files:
+
+```text
+python -m shadow_v8.tools.replay_validate data/replay --min-bars 120 --output-dir runtime/replay_reports
+```
+
+CSV files should include `timestamp,open,high,low,close,volume`. Reports are written under `runtime/`, which is intentionally ignored by Git.
+
 ## 7. Files Changed
 
 - `shadow_v8/research/replay.py`
@@ -60,6 +68,8 @@ The replay layer now includes gate analytics (`schema_version=1.5.0`) so skipped
 - `shadow_v8/tools/replay_csv.py`
 - `shadow_v8/tools/replay_smoke.py`
 - `shadow_v8/tools/replay_unit_smoke.py`
+- `shadow_v8/tools/replay_validate.py`
+- `shadow_v8/tools/replay_validate_smoke.py`
 - `SHADOW_V8_REPLAY_UPDATE.md`
 
 ## 8. Smoke Test Results
