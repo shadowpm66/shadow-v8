@@ -1,0 +1,148 @@
+from __future__ import annotations
+
+from shadow_v8.models import (
+    AssetConfig,
+    BaseState,
+    ContextState,
+    EarningsState,
+    NestedStructureState,
+    PivotConfirmation,
+    Stage,
+    StageState,
+    StructureSignal,
+    VcpState,
+)
+from shadow_v8.strategy.entry_policy import EntryPolicy
+from shadow_v8.strategy.risk_manager import RiskManager
+from shadow_v8.strategy.scorer import Scorer
+
+
+def assert_true(condition: bool, message: str) -> None:
+    if not condition:
+        raise AssertionError(message)
+
+
+def asset() -> AssetConfig:
+    return AssetConfig(symbol="GATE", asset_class="crypto", broker="paper", allow_long=True, allow_short=True)
+
+
+def stage() -> StageState:
+    return StageState(
+        weekly_stage=Stage.STAGE_2,
+        daily_stage=Stage.STAGE_2,
+        long_permission=True,
+        short_permission=False,
+        risk_bias="RISK_ON",
+    )
+
+
+def base() -> BaseState:
+    return BaseState(
+        found=True,
+        pivot=100.0,
+        quality_score=80.0,
+        metadata={"confirmed": True, "near_pivot": True, "stop_distance_quality": "GOOD", "stop_distance_pct": 3.0},
+    )
+
+
+def vcp() -> VcpState:
+    return VcpState(
+        is_tight=True,
+        tightness_score=82.0,
+        contraction_count=3,
+        volume_dry=True,
+        higher_lows=True,
+        stop_distance_quality="GOOD",
+        metadata={"near_pivot": True, "breakout_volume": True, "atr_compressing": True},
+    )
+
+
+def structure() -> StructureSignal:
+    return StructureSignal(type="W", direction="LONG", quality_score=82.0, neckline=100.0)
+
+
+def nested() -> NestedStructureState:
+    return NestedStructureState(pattern="W_WITHIN_W", confirmed=True, quality_score=70.0)
+
+
+def pivot() -> PivotConfirmation:
+    return PivotConfirmation(
+        pivot=100.0,
+        reclaimed_or_lost=True,
+        retested=True,
+        retest_hold=True,
+        shift_away=True,
+        shift_strength=1.8,
+        confirmed=True,
+    )
+
+
+def context() -> ContextState:
+    return ContextState(
+        quality_score=68.0,
+        nearest_zones=[{"name": "Daily Open"}],
+        zone_count=8,
+        regime="trend_norm",
+        metadata={
+            "reference_confluence": {
+                "favorable_count": 2,
+                "obstacle_count": 0,
+                "flags": ["at_reference_level", "stacked_directional_support"],
+            }
+        },
+    )
+
+
+def check_approved_gate() -> None:
+    setup = Scorer().score(
+        "GATE",
+        stage(),
+        base(),
+        vcp(),
+        structure(),
+        nested(),
+        pivot(),
+        context=context(),
+        earnings=EarningsState(),
+    )
+    gate = setup.metadata["trade_gate"]
+    risk = RiskManager().evaluate(asset(), setup)
+    entry = EntryPolicy().decide(asset(), setup, risk)
+    assert_true(gate["status"] == "ALLOW", "High-quality setup should pass gate")
+    assert_true("pivot_confirmed" in gate["confirmations"], "Gate should confirm pivot")
+    assert_true(entry.action == "ENTER", "A+ quality gated setup should enter")
+
+
+def check_blocked_gate() -> None:
+    weak_structure = StructureSignal(type="NONE", direction="FLAT", quality_score=0.0)
+    weak_pivot = PivotConfirmation(pivot=100.0, retested=True, retest_hold=True, confirmed=False)
+    setup = Scorer().score(
+        "BLOCK",
+        stage(),
+        base(),
+        vcp(),
+        weak_structure,
+        NestedStructureState(),
+        weak_pivot,
+        context=context(),
+    )
+    gate = setup.metadata["trade_gate"]
+    risk = RiskManager().evaluate(asset(), setup)
+    entry = EntryPolicy().decide(asset(), setup, risk)
+    assert_true(gate["status"] == "BLOCK", "Weak setup should be gate blocked")
+    assert_true("no_trade_direction" in gate["blockers"], "Gate should block missing direction")
+    assert_true(entry.action == "SKIP", "Blocked gate should skip entry")
+    assert_true("Gate blocked" in entry.reason, "Skip reason should explain gate blockers")
+
+
+def main() -> None:
+    check_approved_gate()
+    check_blocked_gate()
+    print("Strategy gate smoke complete")
+    print("ok=True")
+    print("approved_gate=ALLOW")
+    print("blocked_gate=SKIP")
+
+
+if __name__ == "__main__":
+    main()

@@ -130,6 +130,7 @@ class DashboardWriter:
         entry = result["entry"]
         risk = result["risk"]
         risk_metadata = risk.metadata or {}
+        trade_gate = setup.metadata.get("trade_gate") or {}
         market = result["market"]
         fundamentals = result.get("fundamentals")
         earnings = result.get("earnings")
@@ -176,6 +177,9 @@ class DashboardWriter:
             "position_pct": risk_metadata.get("position_pct"),
             "stop_distance_pct": risk_metadata.get("stop_distance_pct"),
             "wide_structure_risk": risk_metadata.get("wide_structure_risk"),
+            "gate_status": trade_gate.get("status"),
+            "gate_blockers": trade_gate.get("blockers", []),
+            "gate_warnings": trade_gate.get("warnings", []),
             "reasons": setup.reasons,
         }
 
@@ -184,6 +188,7 @@ class DashboardWriter:
         setup = result["setup"]
         entry = result["entry"]
         risk = result["risk"]
+        trade_gate = setup.metadata.get("trade_gate") or {}
         pivot = result["pivot"]
         vcp = result["vcp"]
         context = result.get("context")
@@ -199,6 +204,8 @@ class DashboardWriter:
             "score": round(setup.final_score, 2),
             "direction": setup.direction,
             "risk_state": risk.state,
+            "gate_status": trade_gate.get("status"),
+            "gate_blockers": trade_gate.get("blockers", []),
             "reason": entry.reason,
             "fundamental_grade": getattr(fundamentals, "fundamental_grade", None),
             "earnings_blocked": getattr(earnings, "blocked_for_earnings", None),

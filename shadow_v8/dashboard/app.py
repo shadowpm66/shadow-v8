@@ -149,6 +149,7 @@ def _render_dashboard(
               <th>VCP</th>
               <th>Structure</th>
               <th>Context</th>
+              <th>Gate</th>
               <th>Pivot</th>
               <th>Fund</th>
               <th>Earnings</th>
@@ -402,6 +403,7 @@ def _scanner_row(row: dict[str, Any]) -> str:
         <td>{_e(row.get("vcp_score"))}</td>
         <td>{_e(row.get("structure_type"))}/{_e(row.get("structure_score"))}</td>
         <td>{_e(_context_text(row))}</td>
+        <td>{_e(_gate_text(row))}</td>
         <td>{_yes_no(row.get("pivot_confirmed"))}</td>
         <td>{_e(row.get("fundamental_grade"))}</td>
         <td>{_e(_earnings_text(row))}</td>
@@ -530,6 +532,17 @@ def _context_text(row: dict[str, Any]) -> str:
     if score in (None, ""):
         return f"{nearest}{suffix}"
     return f"{score} {nearest}{suffix}"
+
+
+def _gate_text(row: dict[str, Any]) -> str:
+    status = row.get("gate_status") or "-"
+    blockers = row.get("gate_blockers") or []
+    if blockers:
+        return f"{status}: {', '.join(str(item) for item in blockers[:2])}"
+    warnings = row.get("gate_warnings") or []
+    if warnings:
+        return f"{status}: {', '.join(str(item) for item in warnings[:2])}"
+    return str(status)
 
 
 def _risk_flags(row: dict[str, Any]) -> str:
