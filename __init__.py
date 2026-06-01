@@ -1,5 +1,2 @@
-"""Fundamental data and stock quality engines."""
+"""Operator tools for Shadow v8."""
 
-from shadow_v8.fundamentals.sec_company_facts import SecCompanyFactsClient, SecGrowthInputs
-
-__all__ = ["SecCompanyFactsClient", "SecGrowthInputs"]
