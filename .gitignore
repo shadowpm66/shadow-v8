@@ -1,0 +1,34 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*token*
+*secret*
+*credential*
+
+# Local runtime state
+venv/
+.venv/
+runtime/
+logs/
+
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Build and packaging artifacts
+*.zip
+dist/
+build/
+*.egg-info/
+
+# Local editor/system files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
