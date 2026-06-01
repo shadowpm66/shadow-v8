@@ -135,12 +135,44 @@ def check_blocked_gate() -> None:
     assert_true("Gate blocked" in entry.reason, "Skip reason should explain gate blockers")
 
 
+def check_watch_gate() -> None:
+    developing_pivot = PivotConfirmation(pivot=100.0, retested=True, retest_hold=True, confirmed=False)
+    developing_vcp = VcpState(
+        is_tight=False,
+        tightness_score=58.0,
+        contraction_count=1,
+        volume_dry=False,
+        higher_lows=True,
+        stop_distance_quality="ACCEPTABLE",
+        metadata={"near_pivot": True},
+    )
+    setup = Scorer().score(
+        "WATCH",
+        stage(),
+        BaseState(found=False),
+        developing_vcp,
+        structure(),
+        NestedStructureState(),
+        developing_pivot,
+        context=context(),
+    )
+    gate = setup.metadata["trade_gate"]
+    risk = RiskManager().evaluate(asset(), setup)
+    entry = EntryPolicy().decide(asset(), setup, risk)
+    assert_true(gate["status"] == "WATCH", "Developing setup should reach watch state")
+    assert_true("pivot_waiting_for_shift_away" in gate["watch_reasons"], "Gate should explain watch reason")
+    assert_true(entry.action == "MONITOR", "Watch gate should monitor instead of skip")
+    assert_true("Gate watching" in entry.reason, "Monitor reason should explain watch reasons")
+
+
 def main() -> None:
     check_approved_gate()
+    check_watch_gate()
     check_blocked_gate()
     print("Strategy gate smoke complete")
     print("ok=True")
     print("approved_gate=ALLOW")
+    print("watch_gate=MONITOR")
     print("blocked_gate=SKIP")
 
 

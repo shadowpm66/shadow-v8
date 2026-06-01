@@ -18,7 +18,7 @@ from shadow_v8.structure.vcp_engine import VcpEngine
 from shadow_v8.structure.wm_detector import WmDetector
 
 
-REPLAY_SCHEMA_VERSION = "1.4.0"
+REPLAY_SCHEMA_VERSION = "1.5.0"
 
 
 class Replay:
@@ -116,6 +116,7 @@ class Replay:
                         "confirmation": confirmation,
                         "gate_status": gate.get("status"),
                         "gate_blockers": gate.get("blockers", []),
+                        "gate_watch_reasons": gate.get("watch_reasons", []),
                         "gate_warnings": gate.get("warnings", []),
                         "gate_confirmations": gate.get("confirmations", []),
                         "risk_state": risk.state,
@@ -241,6 +242,7 @@ class Replay:
         status_counter: Counter[str] = Counter()
         blocker_counter: Counter[str] = Counter()
         warning_counter: Counter[str] = Counter()
+        watch_reason_counter: Counter[str] = Counter()
         confirmation_counter: Counter[str] = Counter()
         action_by_status: Counter[str] = Counter()
         blocked_samples: list[dict[str, Any]] = []
@@ -257,9 +259,11 @@ class Replay:
             action_by_status[f"{status}:{action}"] += 1
 
             blockers = [str(item) for item in gate.get("blockers", [])]
+            watch_reasons = [str(item) for item in gate.get("watch_reasons", [])]
             warnings = [str(item) for item in gate.get("warnings", [])]
             confirmations = [str(item) for item in gate.get("confirmations", [])]
             blocker_counter.update(blockers)
+            watch_reason_counter.update(watch_reasons)
             warning_counter.update(warnings)
             confirmation_counter.update(confirmations)
 
@@ -272,27 +276,32 @@ class Replay:
                         "grade": record.get("grade"),
                         "score": record.get("score") or record.get("entry_score"),
                         "blockers": blockers[:5],
+                        "watch_reasons": watch_reasons[:5],
                         "warnings": warnings[:5],
                     }
                 )
 
         evaluated = len(records)
         allowed = status_counter.get("ALLOW", 0)
+        watched = status_counter.get("WATCH", 0)
         blocked = status_counter.get("BLOCK", 0)
         return {
             "evaluated_setups": evaluated,
             "allowed_setups": allowed,
+            "watched_setups": watched,
             "blocked_setups": blocked,
             "unknown_gate_setups": status_counter.get("UNKNOWN", 0),
             "allow_rate": self._round(allowed / evaluated) if evaluated else 0.0,
+            "watch_rate": self._round(watched / evaluated) if evaluated else 0.0,
             "block_rate": self._round(blocked / evaluated) if evaluated else 0.0,
             "status_counts": dict(sorted(status_counter.items())),
             "action_by_status": dict(sorted(action_by_status.items())),
             "top_blockers": self._top_counts(blocker_counter),
+            "top_watch_reasons": self._top_counts(watch_reason_counter),
             "top_warnings": self._top_counts(warning_counter),
             "top_confirmations": self._top_counts(confirmation_counter),
             "blocked_samples": blocked_samples,
-            "validation_notes": self._gate_validation_notes(evaluated, allowed, blocked, blocker_counter),
+            "validation_notes": self._gate_validation_notes(evaluated, allowed, watched, blocked, blocker_counter, watch_reason_counter),
         }
 
     def _gate_from_record(self, record: dict[str, Any]) -> dict[str, Any]:
@@ -307,20 +316,28 @@ class Replay:
         self,
         evaluated: int,
         allowed: int,
+        watched: int,
         blocked: int,
         blocker_counter: Counter[str],
+        watch_reason_counter: Counter[str],
     ) -> list[str]:
         notes: list[str] = []
         if evaluated == 0:
             return ["No setups evaluated"]
         if allowed == 0:
             notes.append("No setups passed the trade gate")
+        if watched == 0:
+            notes.append("No setups reached watch state")
         if blocked == 0:
             notes.append("No setups were blocked by the trade gate")
         if blocker_counter:
             blocker, count = blocker_counter.most_common(1)[0]
             notes.append(f"Most common blocker: {blocker} ({count})")
+        if watch_reason_counter:
+            watch_reason, count = watch_reason_counter.most_common(1)[0]
+            notes.append(f"Most common watch reason: {watch_reason} ({count})")
         notes.append(f"Gate allow rate {self._round(allowed / evaluated) * 100:.2f}%")
+        notes.append(f"Gate watch rate {self._round(watched / evaluated) * 100:.2f}%")
         return notes
 
     def _top_counts(self, counter: Counter[str], limit: int = 10) -> list[dict[str, Any]]:

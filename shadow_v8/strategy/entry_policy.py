@@ -8,6 +8,7 @@ class EntryPolicy:
         gate = setup.metadata.get("trade_gate") or {}
         gate_status = gate.get("status")
         gate_blockers = gate.get("blockers") or []
+        gate_watch_reasons = gate.get("watch_reasons") or []
         if setup.direction == "SHORT" and not asset.allow_short:
             return EntryDecision("SKIP", asset.symbol, setup.direction, "Shorts disabled for asset", setup=setup)
         if setup.direction == "LONG" and not asset.allow_long:
@@ -16,6 +17,16 @@ class EntryPolicy:
             reason = "Gate blocked: " + ", ".join(str(item) for item in gate_blockers[:4])
             return EntryDecision(
                 "SKIP",
+                asset.symbol,
+                setup.direction,
+                reason,
+                setup=setup,
+                metadata={"trade_gate": gate},
+            )
+        if gate_status == "WATCH":
+            reason = "Gate watching: " + ", ".join(str(item) for item in gate_watch_reasons[:4])
+            return EntryDecision(
+                "MONITOR",
                 asset.symbol,
                 setup.direction,
                 reason,

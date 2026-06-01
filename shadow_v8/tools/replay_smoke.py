@@ -140,7 +140,9 @@ def print_result(label: str, result: dict) -> None:
     print(f"risk_state_breakdown={breakdowns['risk_state_breakdown']}")
     print(f"gate_status_counts={gate_analytics.get('status_counts')}")
     print(f"gate_allow_rate={gate_analytics.get('allow_rate')}")
+    print(f"gate_watch_rate={gate_analytics.get('watch_rate')}")
     print(f"gate_top_blockers={gate_analytics.get('top_blockers')}")
+    print(f"gate_top_watch_reasons={gate_analytics.get('top_watch_reasons')}")
     print(f"gate_top_warnings={gate_analytics.get('top_warnings')}")
     print(f"gate_validation_notes={gate_analytics.get('validation_notes')}")
     if result["skipped_setups"]:
@@ -154,7 +156,7 @@ def print_result(label: str, result: dict) -> None:
             "nested_pattern={nested_pattern} stop_distance_quality={stop_distance_quality} "
             "vcp_tightness={vcp_tightness} contractions={contractions} volume_dry={volume_dry} "
             "breakout_volume={breakout_volume} context_score={context_score} nearest_zone={nearest_zone} "
-            "gate_status={gate_status} gate_blockers={gate_blockers}".format(
+            "gate_status={gate_status} gate_blockers={gate_blockers} gate_watch_reasons={gate_watch_reasons}".format(
                 base_confirmed=confirmation["base"].get("confirmed"),
                 pivot_confirmed=confirmation["pivot"].get("confirmed"),
                 nested_pattern=confirmation["nested"].get("pattern"),
@@ -167,6 +169,7 @@ def print_result(label: str, result: dict) -> None:
                 nearest_zone=nearest[0].get("name") if nearest else None,
                 gate_status=gate.get("status"),
                 gate_blockers=gate.get("blockers"),
+                gate_watch_reasons=gate.get("watch_reasons"),
             )
         )
     for idx, trade in enumerate(result["trades"], start=1):
