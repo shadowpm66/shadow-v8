@@ -344,8 +344,12 @@ class Scorer:
             confirmations.append("pivot_confirmed")
         elif pivot.retest_hold:
             watch_reasons.append("pivot_waiting_for_shift_away")
+        elif not pivot.reclaimed_or_lost:
+            watch_reasons.append("pivot_not_reclaimed_or_lost")
+        elif not pivot.retested:
+            watch_reasons.append("pivot_not_retested")
         else:
-            watch_reasons.append("no_pivot_confirmation")
+            watch_reasons.append("pivot_retest_failed")
 
         if stop_distance_quality == "WIDE":
             blockers.append("wide_stop_distance")
