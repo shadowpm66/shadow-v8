@@ -18,7 +18,7 @@ from shadow_v8.structure.vcp_engine import VcpEngine
 from shadow_v8.structure.wm_detector import WmDetector
 
 
-REPLAY_SCHEMA_VERSION = "1.3.0"
+REPLAY_SCHEMA_VERSION = "1.4.0"
 
 
 class Replay:
@@ -102,6 +102,7 @@ class Replay:
                     entry.stop = self._synthetic_stop(candle, structure.direction)
                 self.simulator.open_position(self.asset, entry, candle)
             elif entry.action != "ENTER":
+                gate = confirmation.get("trade_gate", {})
                 skipped_setups.append(
                     {
                         "timestamp": candle.timestamp.isoformat(),
@@ -113,6 +114,10 @@ class Replay:
                         "grade": setup.grade,
                         "score": round(setup.final_score, 4),
                         "confirmation": confirmation,
+                        "gate_status": gate.get("status"),
+                        "gate_blockers": gate.get("blockers", []),
+                        "gate_warnings": gate.get("warnings", []),
+                        "gate_confirmations": gate.get("confirmations", []),
                         "risk_state": risk.state,
                         "risk_reason": risk.reason,
                     }
@@ -125,6 +130,7 @@ class Replay:
         trades = summary["trades"]
         metrics = self._build_metrics(trades, skipped_setups)
         breakdowns = self._build_breakdowns(trades, skipped_setups, action_counts)
+        gate_analytics = self._build_gate_analytics(trades, skipped_setups)
         input_source = self._build_input_source()
         return {
             "schema_version": REPLAY_SCHEMA_VERSION,
@@ -142,6 +148,7 @@ class Replay:
             "input_source": input_source,
             "metrics": metrics,
             "breakdowns": breakdowns,
+            "gate_analytics": gate_analytics,
             "skipped_setups": skipped_setups,
             "skipped_setup_count": len(skipped_setups),
             "trades": trades,
@@ -229,6 +236,95 @@ class Replay:
             "grade_breakdown": dict(sorted(grade_counter.items())),
             "risk_state_breakdown": dict(sorted(risk_state_counter.items())),
         }
+
+    def _build_gate_analytics(self, trades: list[dict[str, Any]], skipped_setups: list[dict[str, Any]]) -> dict[str, Any]:
+        status_counter: Counter[str] = Counter()
+        blocker_counter: Counter[str] = Counter()
+        warning_counter: Counter[str] = Counter()
+        confirmation_counter: Counter[str] = Counter()
+        action_by_status: Counter[str] = Counter()
+        blocked_samples: list[dict[str, Any]] = []
+
+        records: list[tuple[str, dict[str, Any]]] = []
+        records.extend(("skipped", skipped) for skipped in skipped_setups)
+        records.extend(("trade", trade) for trade in trades)
+
+        for record_type, record in records:
+            gate = self._gate_from_record(record)
+            status = str(gate.get("status") or "UNKNOWN")
+            status_counter[status] += 1
+            action = "ENTER" if record_type == "trade" else str(record.get("action") or "UNKNOWN")
+            action_by_status[f"{status}:{action}"] += 1
+
+            blockers = [str(item) for item in gate.get("blockers", [])]
+            warnings = [str(item) for item in gate.get("warnings", [])]
+            confirmations = [str(item) for item in gate.get("confirmations", [])]
+            blocker_counter.update(blockers)
+            warning_counter.update(warnings)
+            confirmation_counter.update(confirmations)
+
+            if blockers and len(blocked_samples) < 10:
+                blocked_samples.append(
+                    {
+                        "timestamp": record.get("timestamp") or record.get("opened_at"),
+                        "symbol": record.get("symbol"),
+                        "action": action,
+                        "grade": record.get("grade"),
+                        "score": record.get("score") or record.get("entry_score"),
+                        "blockers": blockers[:5],
+                        "warnings": warnings[:5],
+                    }
+                )
+
+        evaluated = len(records)
+        allowed = status_counter.get("ALLOW", 0)
+        blocked = status_counter.get("BLOCK", 0)
+        return {
+            "evaluated_setups": evaluated,
+            "allowed_setups": allowed,
+            "blocked_setups": blocked,
+            "unknown_gate_setups": status_counter.get("UNKNOWN", 0),
+            "allow_rate": self._round(allowed / evaluated) if evaluated else 0.0,
+            "block_rate": self._round(blocked / evaluated) if evaluated else 0.0,
+            "status_counts": dict(sorted(status_counter.items())),
+            "action_by_status": dict(sorted(action_by_status.items())),
+            "top_blockers": self._top_counts(blocker_counter),
+            "top_warnings": self._top_counts(warning_counter),
+            "top_confirmations": self._top_counts(confirmation_counter),
+            "blocked_samples": blocked_samples,
+            "validation_notes": self._gate_validation_notes(evaluated, allowed, blocked, blocker_counter),
+        }
+
+    def _gate_from_record(self, record: dict[str, Any]) -> dict[str, Any]:
+        confirmation = record.get("confirmation") or {}
+        gate = confirmation.get("trade_gate") or {}
+        if gate:
+            return gate
+        setup_metadata = record.get("setup_metadata") or {}
+        return setup_metadata.get("trade_gate") or {}
+
+    def _gate_validation_notes(
+        self,
+        evaluated: int,
+        allowed: int,
+        blocked: int,
+        blocker_counter: Counter[str],
+    ) -> list[str]:
+        notes: list[str] = []
+        if evaluated == 0:
+            return ["No setups evaluated"]
+        if allowed == 0:
+            notes.append("No setups passed the trade gate")
+        if blocked == 0:
+            notes.append("No setups were blocked by the trade gate")
+        if blocker_counter:
+            blocker, count = blocker_counter.most_common(1)[0]
+            notes.append(f"Most common blocker: {blocker} ({count})")
+        notes.append(f"Gate allow rate {self._round(allowed / evaluated) * 100:.2f}%")
+        return notes
+
+    def _top_counts(self, counter: Counter[str], limit: int = 10) -> list[dict[str, Any]]:
+        return [{"name": name, "count": count} for name, count in counter.most_common(limit)]
 
     def _average(self, values: list[float]) -> float:
         return sum(values) / len(values) if values else 0.0
