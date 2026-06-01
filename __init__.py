@@ -1,2 +1,2 @@
-"""Research database, simulator, and replay tools."""
+"""Telegram, commands, logs, digest, and research telemetry."""
 
