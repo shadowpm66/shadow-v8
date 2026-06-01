@@ -1,2 +1,2 @@
-"""Shadow v8 modular trading engine."""
+"""Structure engines: bases, W/M patterns, VCP, pivots, boxes, and volume signatures."""
 
