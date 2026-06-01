@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from shadow_v8.models import (
     BaseState,
     ContextState,
@@ -119,6 +121,22 @@ class Scorer:
         if earnings and earnings.blocked_for_earnings:
             final = min(final, 50)
 
+        trade_gate = self._trade_gate(
+            stage=stage,
+            base=base,
+            vcp=vcp,
+            structure=structure,
+            pivot=pivot,
+            context=context,
+            earnings=earnings,
+            stop_distance_quality=stop_distance_quality,
+        )
+        if trade_gate["status"] == "BLOCK":
+            final = min(final, 54)
+            reasons.append(f"Gate blocked: {', '.join(trade_gate['blockers'][:3])}")
+        elif trade_gate["warnings"]:
+            reasons.append(f"Gate warnings: {', '.join(trade_gate['warnings'][:3])}")
+
         grade = "REJECT"
         if final >= 90:
             grade = "S"
@@ -148,6 +166,7 @@ class Scorer:
                 "nested_confirmation": self._nested_confirmation(nested),
                 "context_confluence": self._context_confluence(context),
                 "stop_distance_quality": stop_distance_quality,
+                "trade_gate": trade_gate,
             },
         )
 
@@ -272,4 +291,102 @@ class Scorer:
             "regime": context.regime,
             "metadata": context.metadata,
             "reasons": context.reasons,
+        }
+
+    def _trade_gate(
+        self,
+        *,
+        stage: StageState,
+        base: BaseState,
+        vcp: VcpState,
+        structure: StructureSignal,
+        pivot: PivotConfirmation,
+        context: ContextState | None,
+        earnings: EarningsState | None,
+        stop_distance_quality: str,
+    ) -> dict[str, Any]:
+        blockers: list[str] = []
+        warnings: list[str] = []
+        confirmations: list[str] = []
+
+        if structure.direction not in ("LONG", "SHORT"):
+            blockers.append("no_trade_direction")
+        elif structure.type == "NONE" or structure.quality_score < 35:
+            blockers.append("weak_structure")
+        else:
+            confirmations.append(f"{structure.type}_{structure.direction}")
+
+        if structure.direction == "LONG":
+            if not stage.long_permission:
+                blockers.append("stage_blocks_long")
+            else:
+                confirmations.append("stage_long_permission")
+        elif structure.direction == "SHORT":
+            if not stage.short_permission:
+                blockers.append("stage_blocks_short")
+            else:
+                confirmations.append("stage_short_permission")
+
+        base_confirmed = bool(base.metadata.get("confirmed")) if base.metadata else False
+        constructive_base_or_vcp = base_confirmed or vcp.is_tight or self._constructive_vcp(
+            vcp, structure.direction, stop_distance_quality
+        )
+        if constructive_base_or_vcp:
+            confirmations.append("constructive_base_or_vcp")
+        else:
+            blockers.append("immature_base_or_vcp")
+
+        if pivot.confirmed:
+            confirmations.append("pivot_confirmed")
+        elif pivot.retest_hold:
+            blockers.append("pivot_waiting_for_shift_away")
+        else:
+            blockers.append("no_pivot_confirmation")
+
+        if stop_distance_quality == "WIDE":
+            blockers.append("wide_stop_distance")
+        elif stop_distance_quality in ("GOOD", "ACCEPTABLE"):
+            confirmations.append(f"stop_distance_{stop_distance_quality.lower()}")
+
+        reference = ((context.metadata or {}).get("reference_confluence", {}) if context else {})
+        favorable_count = int(reference.get("favorable_count") or 0)
+        obstacle_count = int(reference.get("obstacle_count") or 0)
+        reference_flags = list(reference.get("flags") or [])
+        if obstacle_count >= 2 and obstacle_count > favorable_count:
+            blockers.append("against_reference_confluence")
+        elif favorable_count > 0 or "at_reference_level" in reference_flags:
+            confirmations.append("reference_confluence")
+        else:
+            warnings.append("no_nearby_reference_support")
+
+        if context:
+            if context.quality_score < 30:
+                warnings.append("weak_context")
+            elif context.quality_score >= 55:
+                confirmations.append("context_supportive")
+        else:
+            warnings.append("missing_context")
+
+        volume_confirmed = bool(vcp.volume_dry or vcp.metadata.get("breakout_volume"))
+        if volume_confirmed:
+            confirmations.append("volume_quality")
+        else:
+            warnings.append("missing_volume_quality")
+
+        if earnings and earnings.blocked_for_earnings:
+            blockers.append("earnings_block")
+
+        return {
+            "status": "BLOCK" if blockers else "ALLOW",
+            "blockers": blockers,
+            "warnings": warnings,
+            "confirmations": confirmations,
+            "confirmed_count": len(confirmations),
+            "required": [
+                "directional_structure",
+                "stage_permission",
+                "constructive_base_or_vcp",
+                "pivot_confirmation",
+                "valid_stop_distance",
+            ],
         }

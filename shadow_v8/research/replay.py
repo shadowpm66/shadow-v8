@@ -254,4 +254,5 @@ class Replay:
             "nested": setup.metadata.get("nested_confirmation", {}),
             "context": setup.metadata.get("context_confluence", {}),
             "stop_distance_quality": setup.metadata.get("stop_distance_quality", "UNKNOWN"),
+            "trade_gate": setup.metadata.get("trade_gate", {}),
         }

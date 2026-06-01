@@ -63,6 +63,7 @@ def check_replay_fixture() -> dict:
     assert_true("pivot" in result["skipped_setups"][0]["confirmation"], "Confirmation should include pivot fields")
     assert_true("nested" in result["skipped_setups"][0]["confirmation"], "Confirmation should include nested fields")
     assert_true("context" in result["skipped_setups"][0]["confirmation"], "Confirmation should include context fields")
+    assert_true("trade_gate" in result["skipped_setups"][0]["confirmation"], "Confirmation should include trade gate fields")
     vcp = result["skipped_setups"][0]["confirmation"]["vcp"]
     assert_true("tightness_score" in vcp, "VCP confirmation should include tightness score")
     assert_true("contraction_count" in vcp, "VCP confirmation should include contraction count")
@@ -76,6 +77,9 @@ def check_replay_fixture() -> dict:
     reference = context["metadata"]["reference_confluence"]
     assert_true("nearest_reference" in reference, "Reference confluence should include nearest reference")
     assert_true("flags" in reference, "Reference confluence should include flags")
+    gate = result["skipped_setups"][0]["confirmation"]["trade_gate"]
+    assert_true("status" in gate, "Trade gate should include status")
+    assert_true("blockers" in gate, "Trade gate should include blockers")
     return result
 
 
@@ -118,6 +122,7 @@ def main() -> None:
     print(f"fixture_confirmation_keys={list(replay_result['skipped_setups'][0]['confirmation'].keys())}")
     print(f"fixture_vcp_keys={list(replay_result['skipped_setups'][0]['confirmation']['vcp'].keys())}")
     print(f"fixture_context_keys={list(replay_result['skipped_setups'][0]['confirmation']['context'].keys())}")
+    print(f"fixture_trade_gate={replay_result['skipped_setups'][0]['confirmation']['trade_gate']}")
     print(
         "long_trade: r_multiple={r_multiple} mae={mae} mfe={mfe}".format(
             r_multiple=long_trade["r_multiple"],
