@@ -67,19 +67,30 @@ def summary_row(result: dict[str, Any]) -> dict[str, Any]:
     gate = result.get("gate_analytics", {})
     top_blocker = (gate.get("top_blockers") or [{}])[0].get("name")
     top_watch = (gate.get("top_watch_reasons") or [{}])[0].get("name")
+    top_allowed_non_entry = (gate.get("top_allowed_non_entry_reasons") or [{}])[0].get("name")
+    action_by_status = gate.get("action_by_status", {})
     return {
         "symbol": result.get("symbol"),
         "asset_class": result.get("asset_class"),
+        "schema_version": result.get("schema_version"),
         "bars_processed": result.get("bars_processed"),
         "trades": metrics.get("total_trades"),
         "net_r": metrics.get("net_r"),
         "expectancy": metrics.get("expectancy"),
         "skipped_setups": metrics.get("skipped_setup_count"),
+        "allowed_setups": gate.get("allowed_setups"),
+        "allowed_entries": action_by_status.get("ALLOW:ENTER", 0),
+        "allowed_non_entries": sum(
+            int(count)
+            for key, count in action_by_status.items()
+            if str(key).startswith("ALLOW:") and key != "ALLOW:ENTER"
+        ),
         "allow_rate": gate.get("allow_rate"),
         "watch_rate": gate.get("watch_rate"),
         "block_rate": gate.get("block_rate"),
         "top_blocker": top_blocker,
         "top_watch_reason": top_watch,
+        "top_allowed_non_entry_reason": top_allowed_non_entry,
         "validation_notes": gate.get("validation_notes", []),
     }
 
@@ -97,7 +108,9 @@ def print_summary(rows: list[dict[str, Any]]) -> None:
         print(
             "symbol={symbol} bars={bars_processed} trades={trades} net_r={net_r} "
             "allow_rate={allow_rate} watch_rate={watch_rate} block_rate={block_rate} "
-            "top_blocker={top_blocker} top_watch_reason={top_watch_reason}".format(**row)
+            "allowed_entries={allowed_entries} allowed_non_entries={allowed_non_entries} "
+            "top_allowed_non_entry_reason={top_allowed_non_entry_reason} top_blocker={top_blocker} "
+            "top_watch_reason={top_watch_reason}".format(**row)
         )
 
 

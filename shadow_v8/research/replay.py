@@ -18,7 +18,7 @@ from shadow_v8.structure.vcp_engine import VcpEngine
 from shadow_v8.structure.wm_detector import WmDetector
 
 
-REPLAY_SCHEMA_VERSION = "1.5.0"
+REPLAY_SCHEMA_VERSION = "1.5.1"
 
 
 class Replay:
@@ -245,7 +245,9 @@ class Replay:
         watch_reason_counter: Counter[str] = Counter()
         confirmation_counter: Counter[str] = Counter()
         action_by_status: Counter[str] = Counter()
+        allowed_non_entry_counter: Counter[str] = Counter()
         blocked_samples: list[dict[str, Any]] = []
+        allowed_non_entry_samples: list[dict[str, Any]] = []
 
         records: list[tuple[str, dict[str, Any]]] = []
         records.extend(("skipped", skipped) for skipped in skipped_setups)
@@ -266,6 +268,24 @@ class Replay:
             watch_reason_counter.update(watch_reasons)
             warning_counter.update(warnings)
             confirmation_counter.update(confirmations)
+
+            if record_type == "skipped" and status == "ALLOW":
+                reason = str(record.get("reason") or "unknown_non_entry_reason")
+                allowed_non_entry_counter[reason] += 1
+                if len(allowed_non_entry_samples) < 10:
+                    allowed_non_entry_samples.append(
+                        {
+                            "timestamp": record.get("timestamp"),
+                            "symbol": record.get("symbol"),
+                            "action": action,
+                            "direction": record.get("direction"),
+                            "reason": reason,
+                            "grade": record.get("grade"),
+                            "score": record.get("score"),
+                            "risk_state": record.get("risk_state"),
+                            "risk_reason": record.get("risk_reason"),
+                        }
+                    )
 
             if blockers and len(blocked_samples) < 10:
                 blocked_samples.append(
@@ -300,7 +320,9 @@ class Replay:
             "top_watch_reasons": self._top_counts(watch_reason_counter),
             "top_warnings": self._top_counts(warning_counter),
             "top_confirmations": self._top_counts(confirmation_counter),
+            "top_allowed_non_entry_reasons": self._top_counts(allowed_non_entry_counter),
             "blocked_samples": blocked_samples,
+            "allowed_non_entry_samples": allowed_non_entry_samples,
             "validation_notes": self._gate_validation_notes(evaluated, allowed, watched, blocked, blocker_counter, watch_reason_counter),
         }
 
