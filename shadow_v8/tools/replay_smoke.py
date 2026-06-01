@@ -118,6 +118,7 @@ def synthetic_asset() -> AssetConfig:
 def print_result(label: str, result: dict) -> None:
     metrics = result["metrics"]
     breakdowns = result["breakdowns"]
+    gate_analytics = result.get("gate_analytics", {})
     print(f"Replay smoke complete ({label})")
     print(f"schema_version={result['schema_version']}")
     print(f"ok={result['ok']}")
@@ -137,16 +138,23 @@ def print_result(label: str, result: dict) -> None:
     print(f"action_counts={breakdowns['action_counts']}")
     print(f"grade_breakdown={breakdowns['grade_breakdown']}")
     print(f"risk_state_breakdown={breakdowns['risk_state_breakdown']}")
+    print(f"gate_status_counts={gate_analytics.get('status_counts')}")
+    print(f"gate_allow_rate={gate_analytics.get('allow_rate')}")
+    print(f"gate_top_blockers={gate_analytics.get('top_blockers')}")
+    print(f"gate_top_warnings={gate_analytics.get('top_warnings')}")
+    print(f"gate_validation_notes={gate_analytics.get('validation_notes')}")
     if result["skipped_setups"]:
         confirmation = result["skipped_setups"][0]["confirmation"]
         vcp = confirmation.get("vcp", {})
         context = confirmation.get("context", {})
+        gate = confirmation.get("trade_gate", {})
         nearest = context.get("nearest_zones", [{}])
         print(
             "sample_confirmation: base_confirmed={base_confirmed} pivot_confirmed={pivot_confirmed} "
             "nested_pattern={nested_pattern} stop_distance_quality={stop_distance_quality} "
             "vcp_tightness={vcp_tightness} contractions={contractions} volume_dry={volume_dry} "
-            "breakout_volume={breakout_volume} context_score={context_score} nearest_zone={nearest_zone}".format(
+            "breakout_volume={breakout_volume} context_score={context_score} nearest_zone={nearest_zone} "
+            "gate_status={gate_status} gate_blockers={gate_blockers}".format(
                 base_confirmed=confirmation["base"].get("confirmed"),
                 pivot_confirmed=confirmation["pivot"].get("confirmed"),
                 nested_pattern=confirmation["nested"].get("pattern"),
@@ -157,19 +165,23 @@ def print_result(label: str, result: dict) -> None:
                 breakout_volume=vcp.get("breakout_volume"),
                 context_score=context.get("quality_score"),
                 nearest_zone=nearest[0].get("name") if nearest else None,
+                gate_status=gate.get("status"),
+                gate_blockers=gate.get("blockers"),
             )
         )
     for idx, trade in enumerate(result["trades"], start=1):
         confirmation = trade.get("confirmation", {})
         vcp = confirmation.get("vcp", {})
         context = confirmation.get("context", {})
+        gate = confirmation.get("trade_gate", {})
         nearest = context.get("nearest_zones", [{}])
         print(
             "trade_{idx}: direction={direction} entry={entry} exit={exit} "
             "duration_bars={duration_bars} mae={mae} mfe={mfe} r_multiple={r_multiple} "
             "base_confirmed={base_confirmed} pivot_confirmed={pivot_confirmed} nested_pattern={nested_pattern} "
             "vcp_tightness={vcp_tightness} contractions={contractions} volume_dry={volume_dry} "
-            "breakout_volume={breakout_volume} context_score={context_score} nearest_zone={nearest_zone}".format(
+            "breakout_volume={breakout_volume} context_score={context_score} nearest_zone={nearest_zone} "
+            "gate_status={gate_status}".format(
                 idx=idx,
                 base_confirmed=confirmation.get("base", {}).get("confirmed"),
                 pivot_confirmed=confirmation.get("pivot", {}).get("confirmed"),
@@ -180,6 +192,7 @@ def print_result(label: str, result: dict) -> None:
                 breakout_volume=vcp.get("breakout_volume"),
                 context_score=context.get("quality_score"),
                 nearest_zone=nearest[0].get("name") if nearest else None,
+                gate_status=gate.get("status"),
                 **trade,
             )
         )

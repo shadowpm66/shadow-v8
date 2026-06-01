@@ -118,6 +118,7 @@ class Simulator:
             "nested": setup_metadata.get("nested_confirmation", {}),
             "context": setup_metadata.get("context_confluence", {}),
             "stop_distance_quality": setup_metadata.get("stop_distance_quality", "UNKNOWN"),
+            "trade_gate": setup_metadata.get("trade_gate", {}),
         }
 
     def _mark_to_market(self, candle: Candle) -> None:

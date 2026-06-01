@@ -51,13 +51,15 @@ The +9.16R result comes from a hand-built synthetic candle fixture designed to p
 
 ## 6. Next Safe Replay Improvement
 
-The next safe improvement is to add a tiny neutral fixture or fixture loader that reads candle data from a local JSON/CSV file, then compare expected replay fields in a smoke or unit-style check. Keep it one symbol and one timeframe first, and continue using the existing strategy modules without duplicating strategy logic inside replay or simulator.
+The replay layer now includes gate analytics (`schema_version=1.4.0`) so skipped setups and trades can be reviewed by gate status, blocker, warning, and confirmation. The next safe improvement is to run real historical CSV data, starting with ETHUSDT 15m, and use the gate analytics to tune overly strict or overly loose strategy rules before live execution.
 
 ## 7. Files Changed
 
 - `shadow_v8/research/replay.py`
 - `shadow_v8/research/simulator.py`
+- `shadow_v8/tools/replay_csv.py`
 - `shadow_v8/tools/replay_smoke.py`
+- `shadow_v8/tools/replay_unit_smoke.py`
 - `SHADOW_V8_REPLAY_UPDATE.md`
 
 ## 8. Smoke Test Results
@@ -77,13 +79,13 @@ python -m shadow_v8.tools.replay_smoke
 Output:
 
 ```text
-Replay smoke complete
+Replay smoke complete (fixture)
 ok=True
-symbol=TESTUSDT
-bars_processed=91
-trades=1
-skipped_setups=49
-win_rate=1.0
-net_r=9.166667
-trade_1: direction=LONG entry=138 exit=149 mae=-1.2 mfe=12.2 r_multiple=9.166667
+schema_version=1.4.0
+trades=0
+skipped_setups=23
+gate_status_counts={'BLOCK': 23}
+gate_allow_rate=0.0
+gate_top_blockers=[{'name': 'immature_base_or_vcp', 'count': 20}, ...]
+gate_validation_notes=['No setups passed the trade gate', ...]
 ```
