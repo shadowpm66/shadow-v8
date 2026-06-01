@@ -72,6 +72,10 @@ def check_replay_fixture() -> dict:
     assert_true("quality_score" in context, "Context confirmation should include quality score")
     assert_true("nearest_zones" in context, "Context confirmation should include nearest zones")
     assert_true("regime" in context, "Context confirmation should include market regime")
+    assert_true("reference_confluence" in context["metadata"], "Context metadata should include reference confluence")
+    reference = context["metadata"]["reference_confluence"]
+    assert_true("nearest_reference" in reference, "Reference confluence should include nearest reference")
+    assert_true("flags" in reference, "Reference confluence should include flags")
     return result
 
 

@@ -20,6 +20,7 @@ from shadow_v8.config import (
     ensure_runtime_dirs,
 )
 from shadow_v8.context.stage_engine import StageEngine
+from shadow_v8.context.zones import ContextEngine
 from shadow_v8.data.bybit_market_data import BybitMarketData
 from shadow_v8.data.market_data import CompositeMarketData, MarketDataProvider
 from shadow_v8.data.scanner import CryptoScanner, StockScanner
@@ -416,6 +417,7 @@ def _evaluate_stock_asset(
     weekly = market.candles.get("W") or _demo_candles(count=80, start=80.0)
     stage = StageEngine().evaluate(weekly=weekly, daily=daily)
     structure = WmDetector().detect(daily)
+    context = ContextEngine().evaluate(daily, structure.direction)
     base_direction = structure.direction if structure.direction != "FLAT" else "LONG"
     base = BaseEngine().evaluate(daily, direction=base_direction)
     vcp = VcpEngine().evaluate(daily, pivot=base.pivot)
@@ -431,6 +433,7 @@ def _evaluate_stock_asset(
         structure,
         nested,
         pivot,
+        context=context,
         fundamentals=fundamentals,
         earnings=earnings,
     )
@@ -475,6 +478,7 @@ def _evaluate_stock_asset(
             structure=structure,
             nested_structure=nested,
             pivot_confirmation=pivot,
+            context=context,
             fundamentals=fundamentals,
             earnings=earnings,
             setup=setup,
@@ -489,6 +493,7 @@ def _evaluate_stock_asset(
         "base": base,
         "vcp": vcp,
         "structure": structure,
+        "context": context,
         "nested": nested,
         "pivot": pivot,
         "fundamentals": fundamentals,
@@ -506,12 +511,13 @@ def _evaluate_asset(asset: AssetConfig, bybit: BybitMarketData) -> dict:
     weekly = market.candles.get("W") or _demo_candles(count=80, start=80.0)
     stage = StageEngine().evaluate(weekly=weekly, daily=daily)
     structure = WmDetector().detect(daily)
+    context = ContextEngine().evaluate(daily, structure.direction)
     base_direction = structure.direction if structure.direction != "FLAT" else "LONG"
     base = BaseEngine().evaluate(daily, direction=base_direction)
     vcp = VcpEngine().evaluate(daily, pivot=base.pivot)
     nested = NestedStructureDetector().detect(daily)
     pivot = PivotConfirmationEngine().evaluate(daily, base.pivot, structure.direction)
-    setup = Scorer().score(asset.symbol, stage, base, vcp, structure, nested, pivot)
+    setup = Scorer().score(asset.symbol, stage, base, vcp, structure, nested, pivot, context=context)
     risk = RiskManager().evaluate(asset, setup)
     entry = EntryPolicy().decide(asset, setup, risk)
 
@@ -526,6 +532,7 @@ def _evaluate_asset(asset: AssetConfig, bybit: BybitMarketData) -> dict:
             structure=structure,
             nested_structure=nested,
             pivot_confirmation=pivot,
+            context=context,
             setup=setup,
             entry_decision=entry,
             risk_decision=risk,
@@ -538,6 +545,7 @@ def _evaluate_asset(asset: AssetConfig, bybit: BybitMarketData) -> dict:
         "base": base,
         "vcp": vcp,
         "structure": structure,
+        "context": context,
         "nested": nested,
         "pivot": pivot,
         "setup": setup,

@@ -124,6 +124,7 @@ class DashboardWriter:
         base = result["base"]
         vcp = result["vcp"]
         structure = result["structure"]
+        context = result.get("context")
         nested = result["nested"]
         pivot = result["pivot"]
         entry = result["entry"]
@@ -132,6 +133,7 @@ class DashboardWriter:
         market = result["market"]
         fundamentals = result.get("fundamentals")
         earnings = result.get("earnings")
+        reference_confluence = (context.metadata or {}).get("reference_confluence", {}) if context else {}
         return {
             "rank": rank,
             "symbol": setup.symbol,
@@ -156,6 +158,9 @@ class DashboardWriter:
             "vcp_contractions": vcp.contraction_count,
             "structure_type": structure.type,
             "structure_score": round(structure.quality_score, 2),
+            "context_score": round(context.quality_score, 2) if context else None,
+            "nearest_reference": (reference_confluence.get("nearest_reference") or {}).get("name"),
+            "reference_flags": reference_confluence.get("flags", []),
             "nested_pattern": nested.pattern,
             "nested_confirmed": nested.confirmed,
             "pivot_confirmed": pivot.confirmed,
@@ -181,6 +186,8 @@ class DashboardWriter:
         risk = result["risk"]
         pivot = result["pivot"]
         vcp = result["vcp"]
+        context = result.get("context")
+        reference_confluence = (context.metadata or {}).get("reference_confluence", {}) if context else {}
         fundamentals = result.get("fundamentals")
         earnings = result.get("earnings")
         return {
@@ -198,6 +205,9 @@ class DashboardWriter:
             "earnings_days": getattr(earnings, "days_until_earnings", None),
             "pivot_confirmed": pivot.confirmed,
             "vcp_score": round(vcp.tightness_score, 2),
+            "context_score": round(context.quality_score, 2) if context else None,
+            "nearest_reference": (reference_confluence.get("nearest_reference") or {}).get("name"),
+            "reference_flags": reference_confluence.get("flags", []),
         }
 
     def _position_rows(self) -> list[dict[str, Any]]:
