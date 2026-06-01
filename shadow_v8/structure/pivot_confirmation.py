@@ -29,6 +29,14 @@ class PivotConfirmationEngine:
             shift_distance = last.close - max(pivot, prior_high)
             shift = retest_hold and shift_distance >= max(0.0, atr_value * self.shift_atr_mult)
             strength = (shift_distance / max(atr_value, pivot * 0.01)) * 100.0 if shift else 0.0
+            distance_to_pivot = pivot - last.close
+            state = self._state(
+                confirmed=bool(reclaimed and retested and retest_hold and shift),
+                reclaimed=reclaimed,
+                retested=retested,
+                retest_hold=retest_hold,
+                direction=direction,
+            )
         elif direction == "SHORT":
             reclaimed = any(c.close < pivot for c in recent[:-3])
             retest_candles = [
@@ -42,13 +50,25 @@ class PivotConfirmationEngine:
             shift_distance = min(pivot, prior_low) - last.close
             shift = retest_hold and shift_distance >= max(0.0, atr_value * self.shift_atr_mult)
             strength = (shift_distance / max(atr_value, pivot * 0.01)) * 100.0 if shift else 0.0
+            distance_to_pivot = last.close - pivot
+            state = self._state(
+                confirmed=bool(reclaimed and retested and retest_hold and shift),
+                reclaimed=reclaimed,
+                retested=retested,
+                retest_hold=retest_hold,
+                direction=direction,
+            )
         else:
             reclaimed = retested = retest_hold = shift = False
             strength = 0.0
             shift_distance = 0.0
+            distance_to_pivot = 0.0
             retest_candles = []
+            state = "no_trade_direction"
         retest_timestamp = retest_candles[-1].timestamp.isoformat() if retest_candles else None
         shift_distance_atr = shift_distance / atr_value if atr_value > 0 else None
+        distance_to_pivot_pct = distance_to_pivot / max(pivot, 1e-9) * 100.0 if pivot else None
+        distance_to_pivot_atr = distance_to_pivot / atr_value if atr_value > 0 else None
         return PivotConfirmation(
             pivot=pivot,
             reclaimed_or_lost=reclaimed,
@@ -68,9 +88,32 @@ class PivotConfirmationEngine:
                 "atr": round(atr_value, 4) if atr_value else None,
                 "shift_distance": round(shift_distance, 4),
                 "shift_distance_atr": round(shift_distance_atr, 4) if shift_distance_atr is not None else None,
+                "distance_to_pivot": round(distance_to_pivot, 4),
+                "distance_to_pivot_pct": round(distance_to_pivot_pct, 4) if distance_to_pivot_pct is not None else None,
+                "distance_to_pivot_atr": round(distance_to_pivot_atr, 4) if distance_to_pivot_atr is not None else None,
+                "state": state,
                 "shift_atr_mult": self.shift_atr_mult,
                 "retest_count": len(retest_candles),
                 "last_retest_timestamp": retest_timestamp,
                 "retest_tolerance_pct": self.retest_tolerance_pct,
             },
         )
+
+    def _state(
+        self,
+        *,
+        confirmed: bool,
+        reclaimed: bool,
+        retested: bool,
+        retest_hold: bool,
+        direction: Direction,
+    ) -> str:
+        if confirmed:
+            return "confirmed"
+        if not reclaimed:
+            return "awaiting_reclaim" if direction == "LONG" else "awaiting_loss"
+        if not retested:
+            return "awaiting_retest"
+        if not retest_hold:
+            return "retest_failed"
+        return "awaiting_shift_away"
