@@ -1,2 +1,2 @@
-"""Broker execution adapters and reconciliation."""
+"""Research database, simulator, and replay tools."""
 
