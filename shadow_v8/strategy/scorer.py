@@ -345,7 +345,13 @@ class Scorer:
         elif pivot.retest_hold:
             watch_reasons.append("pivot_waiting_for_shift_away")
         elif not pivot.reclaimed_or_lost:
-            watch_reasons.append("pivot_not_reclaimed_or_lost")
+            pivot_state = str((pivot.metadata or {}).get("state") or "")
+            if pivot_state == "awaiting_reclaim":
+                watch_reasons.append("pivot_awaiting_reclaim")
+            elif pivot_state == "awaiting_loss":
+                watch_reasons.append("pivot_awaiting_loss")
+            else:
+                watch_reasons.append("pivot_not_reclaimed_or_lost")
         elif not pivot.retested:
             watch_reasons.append("pivot_not_retested")
         else:

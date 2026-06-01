@@ -203,8 +203,15 @@ def check_pivot_watch_reason_details() -> None:
     scenarios = [
         (
             "not_reclaimed",
-            PivotConfirmation(pivot=100.0, reclaimed_or_lost=False, retested=False, retest_hold=False, confirmed=False),
-            "pivot_not_reclaimed_or_lost",
+            PivotConfirmation(
+                pivot=100.0,
+                reclaimed_or_lost=False,
+                retested=False,
+                retest_hold=False,
+                confirmed=False,
+                metadata={"state": "awaiting_reclaim"},
+            ),
+            "pivot_awaiting_reclaim",
         ),
         (
             "not_retested",
@@ -231,6 +238,47 @@ def check_pivot_watch_reason_details() -> None:
         gate = setup.metadata["trade_gate"]
         assert_true(gate["status"] == "WATCH", f"{label} pivot setup should be watched")
         assert_true(expected_reason in gate["watch_reasons"], f"{label} should report {expected_reason}")
+
+
+def check_short_pivot_awaiting_loss_reason() -> None:
+    short_stage = StageState(
+        weekly_stage=Stage.STAGE_4,
+        daily_stage=Stage.STAGE_4,
+        long_permission=False,
+        short_permission=True,
+        risk_bias="RISK_ON",
+    )
+    short_structure = StructureSignal(type="M", direction="SHORT", quality_score=82.0, neckline=100.0)
+    short_vcp = VcpState(
+        is_tight=True,
+        tightness_score=82.0,
+        contraction_count=3,
+        volume_dry=True,
+        lower_highs=True,
+        stop_distance_quality="GOOD",
+        metadata={"near_pivot": True, "breakout_volume": True, "atr_compressing": True},
+    )
+    short_pivot = PivotConfirmation(
+        pivot=100.0,
+        reclaimed_or_lost=False,
+        retested=False,
+        retest_hold=False,
+        confirmed=False,
+        metadata={"state": "awaiting_loss"},
+    )
+    setup = Scorer().score(
+        "PIVOT_SHORT",
+        short_stage,
+        base(),
+        short_vcp,
+        short_structure,
+        NestedStructureState(pattern="M_WITHIN_M", confirmed=True, quality_score=70.0),
+        short_pivot,
+        context=context(),
+    )
+    gate = setup.metadata["trade_gate"]
+    assert_true(gate["status"] == "WATCH", "Short pivot awaiting loss should be watched")
+    assert_true("pivot_awaiting_loss" in gate["watch_reasons"], "Short pivot should report awaiting loss")
 
 
 def check_mixed_reference_watch_gate() -> None:
@@ -276,6 +324,7 @@ def main() -> None:
     check_approved_gate()
     check_watch_gate()
     check_pivot_watch_reason_details()
+    check_short_pivot_awaiting_loss_reason()
     check_blocked_gate()
     check_mixed_reference_watch_gate()
     check_stacked_obstacle_reference_block()
@@ -287,6 +336,7 @@ def main() -> None:
     print("mixed_reference_gate=MONITOR")
     print("stacked_reference_gate=SKIP")
     print("pivot_watch_reasons=granular")
+    print("directional_pivot_states=enabled")
 
 
 if __name__ == "__main__":
