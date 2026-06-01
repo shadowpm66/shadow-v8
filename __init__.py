@@ -1,2 +1,2 @@
-"""Market data adapters and cache helpers."""
+"""Broker execution adapters and reconciliation."""
 
