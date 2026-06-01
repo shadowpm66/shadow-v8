@@ -1,2 +1,2 @@
-"""Telegram, commands, logs, digest, and research telemetry."""
+"""Local dashboard for Shadow v8 runtime snapshots."""
 
