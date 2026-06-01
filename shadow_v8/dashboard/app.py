@@ -148,6 +148,7 @@ def _render_dashboard(
               <th>Base</th>
               <th>VCP</th>
               <th>Structure</th>
+              <th>Context</th>
               <th>Pivot</th>
               <th>Fund</th>
               <th>Earnings</th>
@@ -400,6 +401,7 @@ def _scanner_row(row: dict[str, Any]) -> str:
         <td>{_e(row.get("base_quality"))}</td>
         <td>{_e(row.get("vcp_score"))}</td>
         <td>{_e(row.get("structure_type"))}/{_e(row.get("structure_score"))}</td>
+        <td>{_e(_context_text(row))}</td>
         <td>{_yes_no(row.get("pivot_confirmed"))}</td>
         <td>{_e(row.get("fundamental_grade"))}</td>
         <td>{_e(_earnings_text(row))}</td>
@@ -518,6 +520,16 @@ def _earnings_text(row: dict[str, Any]) -> str:
     if days in (None, ""):
         return "-"
     return f"{days}d"
+
+
+def _context_text(row: dict[str, Any]) -> str:
+    score = row.get("context_score")
+    nearest = row.get("nearest_reference") or "-"
+    flags = row.get("reference_flags") or []
+    suffix = f" {'/'.join(flags[:2])}" if flags else ""
+    if score in (None, ""):
+        return f"{nearest}{suffix}"
+    return f"{score} {nearest}{suffix}"
 
 
 def _risk_flags(row: dict[str, Any]) -> str:

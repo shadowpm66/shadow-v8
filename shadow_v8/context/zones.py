@@ -46,6 +46,8 @@ class ContextEngine:
         zones = self._build_zones(candles, adr, awr, band)
         nearest = self._nearest_zones(price, zones, direction)
         score = self._context_score(nearest, direction)
+        reference_confluence = self._reference_confluence(price, zones, direction, adr)
+        score += reference_confluence["score_adjustment"]
         regime = detect_market_regime(candles)
         if regime == "trend_norm":
             score += 4.0
@@ -57,6 +59,7 @@ class ContextEngine:
 
         reasons = [
             f"Nearest zone {nearest[0]['name']}" if nearest else "No nearby zone",
+            reference_confluence["summary"],
             f"Context score {score:.1f}",
             f"Market regime {regime}",
         ]
@@ -74,6 +77,7 @@ class ContextEngine:
                 "adr": round(adr, 6),
                 "awr": round(awr, 6),
                 "band": round(band, 6),
+                "reference_confluence": reference_confluence,
                 "zones": [self._zone_dict(zone, price, direction) for zone in zones],
             },
         )
@@ -163,6 +167,65 @@ class ContextEngine:
             weighted += clamp(score, 0.0, 100.0) * weight
             total_weight += weight
         return weighted / total_weight if total_weight else 0.0
+
+    def _reference_confluence(
+        self,
+        price: float,
+        zones: list[Zone],
+        direction: Direction,
+        adr: float,
+    ) -> dict[str, Any]:
+        reference_kinds = {"daily_open", "day_high", "day_low", "adr", "awr", "session", "previous_session", "pivot", "psych"}
+        reference_zones = [zone for zone in zones if zone.kind in reference_kinds]
+        zone_rows = [self._zone_dict(zone, price, direction) for zone in reference_zones]
+        nearby = sorted(
+            [row for row in zone_rows if row["distance"] <= max(float(row["band"]), adr * 0.12)],
+            key=lambda row: row["distance"],
+        )
+        supports = [row for row in nearby if row["directional_role"] == "support"]
+        resistances = [row for row in nearby if row["directional_role"] == "resistance"]
+        at_levels = [row for row in nearby if row["contains_price"]]
+        favorable_levels = supports if direction == "LONG" else resistances if direction == "SHORT" else []
+        obstacle_levels = resistances if direction == "LONG" else supports if direction == "SHORT" else []
+
+        score_adjustment = 0.0
+        if direction in ("LONG", "SHORT"):
+            score_adjustment += min(10.0, len(favorable_levels) * 3.0)
+            score_adjustment -= min(8.0, len(obstacle_levels) * 2.0)
+        score_adjustment += min(4.0, len(at_levels) * 1.5)
+
+        flags: list[str] = []
+        if at_levels:
+            flags.append("at_reference_level")
+        if len(favorable_levels) >= 2:
+            flags.append("stacked_directional_support")
+        if len(obstacle_levels) >= 2:
+            flags.append("nearby_directional_resistance")
+        if any(row["kind"] == "adr" and row["contains_price"] for row in nearby):
+            flags.append("at_adr_boundary")
+        if any(row["kind"] == "psych" and row["contains_price"] for row in nearby):
+            flags.append("at_psych_level")
+
+        nearest_reference = nearby[0] if nearby else None
+        summary = "Reference confluence neutral"
+        if nearest_reference:
+            summary = f"Reference confluence near {nearest_reference['name']}"
+        if flags:
+            summary = f"{summary} ({', '.join(flags[:2])})"
+
+        return {
+            "summary": summary,
+            "score_adjustment": round(score_adjustment, 4),
+            "flags": flags,
+            "nearby_count": len(nearby),
+            "support_count": len(supports),
+            "resistance_count": len(resistances),
+            "favorable_count": len(favorable_levels),
+            "obstacle_count": len(obstacle_levels),
+            "at_level_count": len(at_levels),
+            "nearest_reference": nearest_reference,
+            "nearby_references": nearby[:8],
+        }
 
     def _current_day(self, candles: list[Candle]) -> list[Candle]:
         date = candles[-1].timestamp.date()
