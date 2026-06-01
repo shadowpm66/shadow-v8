@@ -93,6 +93,40 @@ def context() -> ContextState:
     )
 
 
+def mixed_reference_context() -> ContextState:
+    return ContextState(
+        quality_score=58.0,
+        nearest_zones=[{"name": "ADR Low"}],
+        zone_count=10,
+        regime="range_norm",
+        metadata={
+            "reference_confluence": {
+                "favorable_count": 2,
+                "obstacle_count": 3,
+                "at_level_count": 5,
+                "flags": ["at_reference_level", "stacked_directional_support", "nearby_directional_resistance"],
+            }
+        },
+    )
+
+
+def stacked_obstacle_context() -> ContextState:
+    return ContextState(
+        quality_score=45.0,
+        nearest_zones=[{"name": "Session High"}],
+        zone_count=10,
+        regime="range_norm",
+        metadata={
+            "reference_confluence": {
+                "favorable_count": 0,
+                "obstacle_count": 3,
+                "at_level_count": 3,
+                "flags": ["at_reference_level", "nearby_directional_resistance"],
+            }
+        },
+    )
+
+
 def check_approved_gate() -> None:
     setup = Scorer().score(
         "GATE",
@@ -165,15 +199,58 @@ def check_watch_gate() -> None:
     assert_true("Gate watching" in entry.reason, "Monitor reason should explain watch reasons")
 
 
+def check_mixed_reference_watch_gate() -> None:
+    setup = Scorer().score(
+        "MIXEDREF",
+        stage(),
+        base(),
+        vcp(),
+        structure(),
+        nested(),
+        pivot(),
+        context=mixed_reference_context(),
+    )
+    gate = setup.metadata["trade_gate"]
+    risk = RiskManager().evaluate(asset(), setup)
+    entry = EntryPolicy().decide(asset(), setup, risk)
+    assert_true(gate["status"] == "WATCH", "Mixed reference confluence should be watched, not blocked")
+    assert_true("mixed_reference_confluence" in gate["watch_reasons"], "Gate should explain mixed reference watch")
+    assert_true("against_reference_confluence" not in gate["blockers"], "Mixed reference should not hard block")
+    assert_true(entry.action == "MONITOR", "Mixed reference watch should monitor")
+
+
+def check_stacked_obstacle_reference_block() -> None:
+    setup = Scorer().score(
+        "STACKEDREF",
+        stage(),
+        base(),
+        vcp(),
+        structure(),
+        nested(),
+        pivot(),
+        context=stacked_obstacle_context(),
+    )
+    gate = setup.metadata["trade_gate"]
+    risk = RiskManager().evaluate(asset(), setup)
+    entry = EntryPolicy().decide(asset(), setup, risk)
+    assert_true(gate["status"] == "BLOCK", "Stacked opposing references should remain blocked")
+    assert_true("against_reference_confluence" in gate["blockers"], "Gate should block stacked opposing references")
+    assert_true(entry.action == "SKIP", "Stacked opposing reference should skip")
+
+
 def main() -> None:
     check_approved_gate()
     check_watch_gate()
     check_blocked_gate()
+    check_mixed_reference_watch_gate()
+    check_stacked_obstacle_reference_block()
     print("Strategy gate smoke complete")
     print("ok=True")
     print("approved_gate=ALLOW")
     print("watch_gate=MONITOR")
     print("blocked_gate=SKIP")
+    print("mixed_reference_gate=MONITOR")
+    print("stacked_reference_gate=SKIP")
 
 
 if __name__ == "__main__":

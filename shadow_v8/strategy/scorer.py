@@ -355,11 +355,16 @@ class Scorer:
         reference = ((context.metadata or {}).get("reference_confluence", {}) if context else {})
         favorable_count = int(reference.get("favorable_count") or 0)
         obstacle_count = int(reference.get("obstacle_count") or 0)
+        at_level_count = int(reference.get("at_level_count") or 0)
         reference_flags = list(reference.get("flags") or [])
-        if obstacle_count >= 2 and obstacle_count > favorable_count:
+        if obstacle_count >= 2 and obstacle_count >= favorable_count + 2:
             blockers.append("against_reference_confluence")
+        elif obstacle_count >= 2 and obstacle_count > favorable_count:
+            watch_reasons.append("mixed_reference_confluence")
         elif favorable_count > 0 or "at_reference_level" in reference_flags:
             confirmations.append("reference_confluence")
+        elif obstacle_count and at_level_count:
+            watch_reasons.append("reference_level_overhead")
         else:
             warnings.append("no_nearby_reference_support")
 
