@@ -1,2 +1,2 @@
-"""Operator tools for Shadow v8."""
+"""External bridges such as TradingView webhooks."""
 
