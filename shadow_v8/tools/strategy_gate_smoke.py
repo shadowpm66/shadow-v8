@@ -199,6 +199,40 @@ def check_watch_gate() -> None:
     assert_true("Gate watching" in entry.reason, "Monitor reason should explain watch reasons")
 
 
+def check_pivot_watch_reason_details() -> None:
+    scenarios = [
+        (
+            "not_reclaimed",
+            PivotConfirmation(pivot=100.0, reclaimed_or_lost=False, retested=False, retest_hold=False, confirmed=False),
+            "pivot_not_reclaimed_or_lost",
+        ),
+        (
+            "not_retested",
+            PivotConfirmation(pivot=100.0, reclaimed_or_lost=True, retested=False, retest_hold=False, confirmed=False),
+            "pivot_not_retested",
+        ),
+        (
+            "retest_failed",
+            PivotConfirmation(pivot=100.0, reclaimed_or_lost=True, retested=True, retest_hold=False, confirmed=False),
+            "pivot_retest_failed",
+        ),
+    ]
+    for label, pivot_state, expected_reason in scenarios:
+        setup = Scorer().score(
+            f"PIVOT_{label}",
+            stage(),
+            base(),
+            vcp(),
+            structure(),
+            nested(),
+            pivot_state,
+            context=context(),
+        )
+        gate = setup.metadata["trade_gate"]
+        assert_true(gate["status"] == "WATCH", f"{label} pivot setup should be watched")
+        assert_true(expected_reason in gate["watch_reasons"], f"{label} should report {expected_reason}")
+
+
 def check_mixed_reference_watch_gate() -> None:
     setup = Scorer().score(
         "MIXEDREF",
@@ -241,6 +275,7 @@ def check_stacked_obstacle_reference_block() -> None:
 def main() -> None:
     check_approved_gate()
     check_watch_gate()
+    check_pivot_watch_reason_details()
     check_blocked_gate()
     check_mixed_reference_watch_gate()
     check_stacked_obstacle_reference_block()
@@ -251,6 +286,7 @@ def main() -> None:
     print("blocked_gate=SKIP")
     print("mixed_reference_gate=MONITOR")
     print("stacked_reference_gate=SKIP")
+    print("pivot_watch_reasons=granular")
 
 
 if __name__ == "__main__":
