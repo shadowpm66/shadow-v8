@@ -51,7 +51,7 @@ The +9.16R result comes from a hand-built synthetic candle fixture designed to p
 
 ## 6. Next Safe Replay Improvement
 
-The replay layer now includes gate analytics (`schema_version=1.4.0`) so skipped setups and trades can be reviewed by gate status, blocker, warning, and confirmation. The next safe improvement is to run real historical CSV data, starting with ETHUSDT 15m, and use the gate analytics to tune overly strict or overly loose strategy rules before live execution.
+The replay layer now includes gate analytics (`schema_version=1.5.0`) so skipped setups and trades can be reviewed by gate status, blocker, watch reason, warning, and confirmation. Gate status now separates `BLOCK`, `WATCH`, and `ALLOW`, which lets replay distinguish invalid setups from developing setups that should be monitored. The next safe improvement is to run real historical CSV data, starting with ETHUSDT 15m, and use the gate analytics to tune overly strict or overly loose strategy rules before live execution.
 
 ## 7. Files Changed
 
@@ -81,11 +81,13 @@ Output:
 ```text
 Replay smoke complete (fixture)
 ok=True
-schema_version=1.4.0
+schema_version=1.5.0
 trades=0
 skipped_setups=23
 gate_status_counts={'BLOCK': 23}
 gate_allow_rate=0.0
-gate_top_blockers=[{'name': 'immature_base_or_vcp', 'count': 20}, ...]
+gate_watch_rate=0.0
+gate_top_blockers=[{'name': 'stage_blocks_long', 'count': 14}, ...]
+gate_top_watch_reasons=[{'name': 'immature_base_or_vcp', 'count': 20}, ...]
 gate_validation_notes=['No setups passed the trade gate', ...]
 ```

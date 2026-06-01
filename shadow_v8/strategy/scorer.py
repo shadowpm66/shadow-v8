@@ -134,6 +134,9 @@ class Scorer:
         if trade_gate["status"] == "BLOCK":
             final = min(final, 54)
             reasons.append(f"Gate blocked: {', '.join(trade_gate['blockers'][:3])}")
+        elif trade_gate["status"] == "WATCH":
+            final = max(final, 55) if final >= 45 else final
+            reasons.append(f"Gate watching: {', '.join(trade_gate['watch_reasons'][:3])}")
         elif trade_gate["warnings"]:
             reasons.append(f"Gate warnings: {', '.join(trade_gate['warnings'][:3])}")
 
@@ -306,6 +309,7 @@ class Scorer:
         stop_distance_quality: str,
     ) -> dict[str, Any]:
         blockers: list[str] = []
+        watch_reasons: list[str] = []
         warnings: list[str] = []
         confirmations: list[str] = []
 
@@ -334,14 +338,14 @@ class Scorer:
         if constructive_base_or_vcp:
             confirmations.append("constructive_base_or_vcp")
         else:
-            blockers.append("immature_base_or_vcp")
+            watch_reasons.append("immature_base_or_vcp")
 
         if pivot.confirmed:
             confirmations.append("pivot_confirmed")
         elif pivot.retest_hold:
-            blockers.append("pivot_waiting_for_shift_away")
+            watch_reasons.append("pivot_waiting_for_shift_away")
         else:
-            blockers.append("no_pivot_confirmation")
+            watch_reasons.append("no_pivot_confirmation")
 
         if stop_distance_quality == "WIDE":
             blockers.append("wide_stop_distance")
@@ -376,9 +380,16 @@ class Scorer:
         if earnings and earnings.blocked_for_earnings:
             blockers.append("earnings_block")
 
+        status = "ALLOW"
+        if blockers:
+            status = "BLOCK"
+        elif watch_reasons:
+            status = "WATCH"
+
         return {
-            "status": "BLOCK" if blockers else "ALLOW",
+            "status": status,
             "blockers": blockers,
+            "watch_reasons": watch_reasons,
             "warnings": warnings,
             "confirmations": confirmations,
             "confirmed_count": len(confirmations),
