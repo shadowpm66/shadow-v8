@@ -1,2 +1,2 @@
-"""Context engines: stage, zones, sessions, pivots, regime, and relative strength."""
+"""Market data adapters and cache helpers."""
 
