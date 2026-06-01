@@ -281,6 +281,31 @@ def check_short_pivot_awaiting_loss_reason() -> None:
     assert_true("pivot_awaiting_loss" in gate["watch_reasons"], "Short pivot should report awaiting loss")
 
 
+def check_pivot_state_precedes_retest_hold() -> None:
+    pivot_state = PivotConfirmation(
+        pivot=100.0,
+        reclaimed_or_lost=False,
+        retested=True,
+        retest_hold=True,
+        shift_away=True,
+        confirmed=False,
+        metadata={"state": "awaiting_reclaim"},
+    )
+    setup = Scorer().score(
+        "PIVOT_ORDER",
+        stage(),
+        base(),
+        vcp(),
+        structure(),
+        nested(),
+        pivot_state,
+        context=context(),
+    )
+    gate = setup.metadata["trade_gate"]
+    assert_true("pivot_awaiting_reclaim" in gate["watch_reasons"], "Pivot state should explain missing reclaim")
+    assert_true("pivot_waiting_for_shift_away" not in gate["watch_reasons"], "Retest hold should not hide missing reclaim")
+
+
 def check_mixed_reference_watch_gate() -> None:
     setup = Scorer().score(
         "MIXEDREF",
@@ -325,6 +350,7 @@ def main() -> None:
     check_watch_gate()
     check_pivot_watch_reason_details()
     check_short_pivot_awaiting_loss_reason()
+    check_pivot_state_precedes_retest_hold()
     check_blocked_gate()
     check_mixed_reference_watch_gate()
     check_stacked_obstacle_reference_block()
