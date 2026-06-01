@@ -61,6 +61,14 @@ python -m shadow_v8.tools.replay_validate data/replay --min-bars 120 --output-di
 
 CSV files should include `timestamp,open,high,low,close,volume`. Reports are written under `runtime/`, which is intentionally ignored by Git.
 
+Public Bybit OHLCV candles can be exported for replay without API keys:
+
+```text
+python -m shadow_v8.tools.bybit_replay_export --symbol ETHUSDT --interval 15 --limit 1000 --validate --min-bars 120
+```
+
+The exporter writes CSV files under `runtime/replay_data/`, then optionally runs replay validation on the exported file. This is intended for historical validation only; it does not touch live trading, broker credentials, Telegram, dashboard auth, or EC2.
+
 ## 7. Files Changed
 
 - `shadow_v8/research/replay.py`
@@ -70,6 +78,7 @@ CSV files should include `timestamp,open,high,low,close,volume`. Reports are wri
 - `shadow_v8/tools/replay_unit_smoke.py`
 - `shadow_v8/tools/replay_validate.py`
 - `shadow_v8/tools/replay_validate_smoke.py`
+- `shadow_v8/tools/bybit_replay_export.py`
 - `SHADOW_V8_REPLAY_UPDATE.md`
 
 ## 8. Smoke Test Results
