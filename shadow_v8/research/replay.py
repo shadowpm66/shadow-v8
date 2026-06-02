@@ -18,7 +18,7 @@ from shadow_v8.structure.vcp_engine import VcpEngine
 from shadow_v8.structure.wm_detector import WmDetector
 
 
-REPLAY_SCHEMA_VERSION = "1.5.9"
+REPLAY_SCHEMA_VERSION = "1.5.10"
 
 
 class Replay:

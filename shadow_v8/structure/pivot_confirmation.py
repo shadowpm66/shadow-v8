@@ -80,6 +80,18 @@ class PivotConfirmationEngine:
             shift_progress_state = "not_started"
         else:
             shift_progress_state = "not_ready"
+        if shift_progress_state == "confirmed":
+            shift_progress_bucket = "confirmed"
+        elif shift_progress_state in ("adverse", "not_ready"):
+            shift_progress_bucket = shift_progress_state
+        elif shift_progress is not None and shift_progress >= 0.5:
+            shift_progress_bucket = "near_confirmation"
+        elif shift_progress is not None and shift_progress >= 0.25:
+            shift_progress_bucket = "building"
+        elif shift_progress is not None and shift_progress > 0:
+            shift_progress_bucket = "early"
+        else:
+            shift_progress_bucket = "not_started"
         distance_to_pivot_pct = distance_to_pivot / max(pivot, 1e-9) * 100.0 if pivot else None
         distance_to_pivot_atr = distance_to_pivot / atr_value if atr_value > 0 else None
         return PivotConfirmation(
@@ -105,6 +117,7 @@ class PivotConfirmationEngine:
                 "shift_required_atr": round(shift_required_atr, 4) if shift_required_atr is not None else None,
                 "shift_progress": round(shift_progress, 4) if shift_progress is not None else None,
                 "shift_progress_state": shift_progress_state,
+                "shift_progress_bucket": shift_progress_bucket,
                 "distance_to_pivot": round(distance_to_pivot, 4),
                 "distance_to_pivot_pct": round(distance_to_pivot_pct, 4) if distance_to_pivot_pct is not None else None,
                 "distance_to_pivot_atr": round(distance_to_pivot_atr, 4) if distance_to_pivot_atr is not None else None,

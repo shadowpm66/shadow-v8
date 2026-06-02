@@ -239,6 +239,7 @@ class Scorer:
             "confirmed": pivot.confirmed,
             "shift_strength": round(pivot.shift_strength, 4),
             "shift_progress_state": (pivot.metadata or {}).get("shift_progress_state"),
+            "shift_progress_bucket": (pivot.metadata or {}).get("shift_progress_bucket"),
             "shift_progress": (pivot.metadata or {}).get("shift_progress"),
             "shift_required_atr": (pivot.metadata or {}).get("shift_required_atr"),
             "shift_distance_atr": (pivot.metadata or {}).get("shift_distance_atr"),
@@ -445,6 +446,13 @@ class Scorer:
                     blockers.append("adverse_pivot_shift")
                 elif shift_progress_state in ("insufficient", "not_started"):
                     watch_reasons.append("pivot_shift_insufficient")
+                    shift_progress_bucket = str((pivot.metadata or {}).get("shift_progress_bucket") or "")
+                    if shift_progress_bucket == "near_confirmation":
+                        watch_reasons.append("pivot_shift_near_confirmation")
+                    elif shift_progress_bucket == "building":
+                        watch_reasons.append("pivot_shift_building")
+                    elif shift_progress_bucket in ("early", "not_started"):
+                        watch_reasons.append("pivot_shift_early")
             elif not pivot.reclaimed_or_lost:
                 watch_reasons.append("pivot_not_reclaimed_or_lost")
             elif not pivot.retested:
