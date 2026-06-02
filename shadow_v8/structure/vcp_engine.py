@@ -76,6 +76,16 @@ class VcpEngine:
         score += 8.0 if near_pivot else 0.0
         score += 8.0 if stop_quality == "GOOD" else 4.0 if stop_quality == "ACCEPTABLE" else -8.0 if stop_quality == "WIDE" else 0.0
         score = clamp(score, 0.0, 100.0)
+        is_tight = score >= 60.0
+        is_near_tight = 55.0 <= score < 60.0
+        if is_tight:
+            development_stage = "tight"
+        elif is_near_tight:
+            development_stage = "near_tight"
+        elif score >= 40.0:
+            development_stage = "forming"
+        else:
+            development_stage = "loose"
         confirmation_missing: list[str] = []
         if contraction_count < 1:
             confirmation_missing.append("vcp_no_contraction")
@@ -94,7 +104,7 @@ class VcpEngine:
         if range_contracted_pct < 35.0:
             confirmation_missing.append("vcp_range_not_contracted")
         return VcpState(
-            is_tight=score >= 60.0,
+            is_tight=is_tight,
             tightness_score=score,
             contraction_count=contraction_count,
             volume_dry=volume_dry,
@@ -124,6 +134,8 @@ class VcpEngine:
                 "volume_dry_up_ratio": round(dry_up_ratio, 4),
                 "breakout_volume_ratio": round(breakout_ratio, 4),
                 "breakout_volume": breakout_volume,
+                "is_near_tight": is_near_tight,
+                "development_stage": development_stage,
                 "stop_distance_pct": round(stop_distance_pct, 3) if stop_distance_pct is not None else None,
                 "atr": round(atr_value, 4) if atr_value else None,
                 "confirmation_missing": confirmation_missing,
