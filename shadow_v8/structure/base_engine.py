@@ -60,6 +60,15 @@ class BaseEngine:
             tight_closes = self._tight_close_count(sample)
             stop_distance_pct = self._stop_distance_pct(last, high, low, direction)
             stop_distance_quality = self._stop_distance_quality(stop_distance_pct)
+            confirmation_missing: list[str] = []
+            if not range_tight:
+                confirmation_missing.append("range_not_tight")
+            if tight_closes < self.min_tight_closes:
+                confirmation_missing.append("not_enough_tight_closes")
+            if not near_pivot:
+                confirmation_missing.append("not_near_pivot")
+            if stop_distance_quality not in ("GOOD", "ACCEPTABLE"):
+                confirmation_missing.append("stop_distance_not_valid")
             base_confirmed = (
                 range_tight
                 and tight_closes >= self.min_tight_closes
@@ -118,12 +127,16 @@ class BaseEngine:
                     "close_position_in_base": round(close_position, 3),
                     "close_tight_pct": round(close_tight_pct, 3),
                     "tight_close_count": tight_closes,
+                    "min_tight_closes": self.min_tight_closes,
+                    "range_tight": range_tight,
                     "range_atr_multiple": round(recent_range / atr_value, 3) if atr_value > 0 else None,
+                    "tight_range_atr_mult": self.tight_range_atr_mult,
                     "near_pivot": near_pivot,
                     "stop_distance_pct": round(stop_distance_pct, 3) if stop_distance_pct is not None else None,
                     "stop_distance_quality": stop_distance_quality,
                     "support_rising": support_rising,
                     "resistance_falling": resistance_falling,
+                    "confirmation_missing": confirmation_missing,
                 },
             )
 

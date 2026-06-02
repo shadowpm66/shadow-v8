@@ -216,8 +216,14 @@ class Scorer:
             "pivot": round(base.pivot, 6) if base.pivot is not None else None,
             "near_pivot": bool(base.metadata.get("near_pivot")) if base.metadata else False,
             "tight_close_count": int(base.metadata.get("tight_close_count", 0)) if base.metadata else 0,
+            "min_tight_closes": int(base.metadata.get("min_tight_closes", 0)) if base.metadata else 0,
+            "range_tight": bool(base.metadata.get("range_tight")) if base.metadata else False,
+            "range_atr_multiple": base.metadata.get("range_atr_multiple") if base.metadata else None,
+            "tight_range_atr_mult": base.metadata.get("tight_range_atr_mult") if base.metadata else None,
+            "close_tight_pct": base.metadata.get("close_tight_pct") if base.metadata else None,
             "stop_distance_pct": base.metadata.get("stop_distance_pct") if base.metadata else None,
             "stop_distance_quality": stop_distance_quality,
+            "confirmation_missing": list(base.metadata.get("confirmation_missing", [])) if base.metadata else [],
         }
 
     def _pivot_confirmation(self, pivot: PivotConfirmation) -> dict:
