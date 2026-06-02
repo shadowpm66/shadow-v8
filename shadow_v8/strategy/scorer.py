@@ -265,6 +265,38 @@ class Scorer:
             and stop_distance_quality in ("GOOD", "ACCEPTABLE")
         )
 
+    def _base_vcp_watch_reasons(
+        self,
+        base: BaseState,
+        vcp: VcpState,
+        direction: str,
+        stop_distance_quality: str,
+    ) -> list[str]:
+        reasons: list[str] = []
+        base_confirmed = bool(base.metadata.get("confirmed")) if base.metadata else False
+        if not base.found:
+            reasons.append("base_not_found")
+        elif not base_confirmed:
+            reasons.append("base_not_confirmed")
+
+        if not vcp.is_tight:
+            reasons.append("vcp_not_tight")
+        if vcp.contraction_count < 1:
+            reasons.append("vcp_no_contraction")
+
+        direction_ok = (
+            (direction == "LONG" and vcp.higher_lows)
+            or (direction == "SHORT" and vcp.lower_highs)
+            or direction == "FLAT"
+        )
+        if not direction_ok:
+            reasons.append("vcp_direction_not_constructive")
+        if not bool(vcp.metadata.get("near_pivot")):
+            reasons.append("vcp_not_near_pivot")
+        if stop_distance_quality not in ("GOOD", "ACCEPTABLE"):
+            reasons.append("stop_distance_not_valid")
+        return reasons or ["immature_base_or_vcp"]
+
     def _nested_confirmation(self, nested: NestedStructureState) -> dict:
         return {
             "pattern": nested.pattern,
@@ -338,7 +370,7 @@ class Scorer:
         if constructive_base_or_vcp:
             confirmations.append("constructive_base_or_vcp")
         else:
-            watch_reasons.append("immature_base_or_vcp")
+            watch_reasons.extend(self._base_vcp_watch_reasons(base, vcp, structure.direction, stop_distance_quality))
 
         if pivot.confirmed:
             confirmations.append("pivot_confirmed")
