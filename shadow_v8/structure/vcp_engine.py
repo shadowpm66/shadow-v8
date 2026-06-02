@@ -31,13 +31,34 @@ class VcpEngine:
         breakout_volume = has_breakout_volume(sample, min(20, len(sample) - 1), multiplier=1.35)
         lows = [min(c.low for c in chunk) for chunk in chunks if chunk]
         highs = [max(c.high for c in chunk) for chunk in chunks if chunk]
+        close_averages = [sum(c.close for c in chunk) / len(chunk) for chunk in chunks if chunk]
         higher_lows = len(lows) >= 3 and lows[-1] >= lows[-2] >= lows[-3]
         lower_highs = len(highs) >= 3 and highs[-1] <= highs[-2] <= highs[-3]
+        close_trend_pct = (
+            (close_averages[-1] - close_averages[0]) / close_averages[0] * 100.0
+            if len(close_averages) >= 2 and close_averages[0] > 0
+            else 0.0
+        )
+        last_close_shift_pct = (
+            (close_averages[-1] - close_averages[-2]) / close_averages[-2] * 100.0
+            if len(close_averages) >= 2 and close_averages[-2] > 0
+            else 0.0
+        )
+        directional_close_shift = (
+            (direction == "LONG" and close_trend_pct > 0.0 and last_close_shift_pct > 0.0)
+            or (direction == "SHORT" and close_trend_pct < 0.0 and last_close_shift_pct < 0.0)
+            or (direction == "FLAT" and abs(close_trend_pct) > 0.0 and abs(last_close_shift_pct) > 0.0)
+        )
+        directional_evidence = "none"
         direction_constructive = (
             (direction == "LONG" and higher_lows)
             or (direction == "SHORT" and lower_highs)
             or (direction == "FLAT" and (higher_lows or lower_highs))
         )
+        if direction_constructive:
+            directional_evidence = "structure"
+        elif directional_close_shift:
+            directional_evidence = "close_shift"
         last = sample[-1].close
         atr_value = atr(candles) or 0.0
         atr_values = [self._chunk_atr(chunk) for chunk in chunks if len(chunk) >= 2]
@@ -124,8 +145,13 @@ class VcpEngine:
             metadata={
                 "ranges": [round(r, 4) for r in ranges],
                 "average_volumes": [round(v, 2) for v in vols],
+                "close_averages": [round(value, 4) for value in close_averages],
                 "direction": direction,
                 "direction_constructive": direction_constructive,
+                "directional_close_shift": directional_close_shift,
+                "directional_evidence": directional_evidence,
+                "close_trend_pct": round(close_trend_pct, 2),
+                "last_close_shift_pct": round(last_close_shift_pct, 2),
                 "range_contracted_pct": round(range_contracted_pct, 2),
                 "atr_values": [round(value, 4) for value in atr_values],
                 "atr_compression_pct": round(atr_compression_pct, 2),
