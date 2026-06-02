@@ -439,6 +439,54 @@ def check_pivot_state_precedes_retest_hold() -> None:
     assert_true("pivot_waiting_for_shift_away" not in gate["watch_reasons"], "Retest hold should not hide missing reclaim")
 
 
+def check_pivot_shift_progress_reasons() -> None:
+    insufficient_pivot = PivotConfirmation(
+        pivot=100.0,
+        reclaimed_or_lost=True,
+        retested=True,
+        retest_hold=True,
+        shift_away=False,
+        confirmed=False,
+        metadata={"state": "awaiting_shift_away", "shift_progress_state": "insufficient"},
+    )
+    adverse_pivot = PivotConfirmation(
+        pivot=100.0,
+        reclaimed_or_lost=True,
+        retested=True,
+        retest_hold=True,
+        shift_away=False,
+        confirmed=False,
+        metadata={"state": "awaiting_shift_away", "shift_progress_state": "adverse"},
+    )
+    insufficient_setup = Scorer().score(
+        "PIVOT_INSUFFICIENT",
+        stage(),
+        base(),
+        vcp(),
+        structure(),
+        nested(),
+        insufficient_pivot,
+        context=context(),
+    )
+    adverse_setup = Scorer().score(
+        "PIVOT_ADVERSE",
+        stage(),
+        base(),
+        vcp(),
+        structure(),
+        nested(),
+        adverse_pivot,
+        context=context(),
+    )
+    insufficient_gate = insufficient_setup.metadata["trade_gate"]
+    adverse_gate = adverse_setup.metadata["trade_gate"]
+    assert_true(
+        "pivot_shift_insufficient" in insufficient_gate["watch_reasons"],
+        "Insufficient pivot shift should be reported",
+    )
+    assert_true("pivot_shift_adverse" in adverse_gate["watch_reasons"], "Adverse pivot shift should be reported")
+
+
 def check_mixed_reference_watch_gate() -> None:
     setup = Scorer().score(
         "MIXEDREF",
@@ -487,6 +535,7 @@ def main() -> None:
     check_developing_directional_vcp_watch()
     check_short_pivot_awaiting_loss_reason()
     check_pivot_state_precedes_retest_hold()
+    check_pivot_shift_progress_reasons()
     check_blocked_gate()
     check_mixed_reference_watch_gate()
     check_stacked_obstacle_reference_block()
@@ -502,6 +551,7 @@ def main() -> None:
     print("close_compression_gate=guarded")
     print("directional_pivot_states=enabled")
     print("developing_directional_vcp=MONITOR")
+    print("pivot_shift_progress=granular")
 
 
 if __name__ == "__main__":
