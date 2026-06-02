@@ -447,7 +447,37 @@ def check_pivot_shift_progress_reasons() -> None:
         retest_hold=True,
         shift_away=False,
         confirmed=False,
-        metadata={"state": "awaiting_shift_away", "shift_progress_state": "insufficient"},
+        metadata={
+            "state": "awaiting_shift_away",
+            "shift_progress_state": "insufficient",
+            "shift_progress_bucket": "near_confirmation",
+        },
+    )
+    building_pivot = PivotConfirmation(
+        pivot=100.0,
+        reclaimed_or_lost=True,
+        retested=True,
+        retest_hold=True,
+        shift_away=False,
+        confirmed=False,
+        metadata={
+            "state": "awaiting_shift_away",
+            "shift_progress_state": "insufficient",
+            "shift_progress_bucket": "building",
+        },
+    )
+    early_pivot = PivotConfirmation(
+        pivot=100.0,
+        reclaimed_or_lost=True,
+        retested=True,
+        retest_hold=True,
+        shift_away=False,
+        confirmed=False,
+        metadata={
+            "state": "awaiting_shift_away",
+            "shift_progress_state": "insufficient",
+            "shift_progress_bucket": "early",
+        },
     )
     adverse_pivot = PivotConfirmation(
         pivot=100.0,
@@ -468,6 +498,26 @@ def check_pivot_shift_progress_reasons() -> None:
         insufficient_pivot,
         context=context(),
     )
+    building_setup = Scorer().score(
+        "PIVOT_BUILDING",
+        stage(),
+        base(),
+        vcp(),
+        structure(),
+        nested(),
+        building_pivot,
+        context=context(),
+    )
+    early_setup = Scorer().score(
+        "PIVOT_EARLY",
+        stage(),
+        base(),
+        vcp(),
+        structure(),
+        nested(),
+        early_pivot,
+        context=context(),
+    )
     adverse_setup = Scorer().score(
         "PIVOT_ADVERSE",
         stage(),
@@ -479,6 +529,8 @@ def check_pivot_shift_progress_reasons() -> None:
         context=context(),
     )
     insufficient_gate = insufficient_setup.metadata["trade_gate"]
+    building_gate = building_setup.metadata["trade_gate"]
+    early_gate = early_setup.metadata["trade_gate"]
     adverse_gate = adverse_setup.metadata["trade_gate"]
     adverse_risk = RiskManager().evaluate(asset(), adverse_setup)
     adverse_entry = EntryPolicy().decide(asset(), adverse_setup, adverse_risk)
@@ -487,6 +539,12 @@ def check_pivot_shift_progress_reasons() -> None:
         "pivot_shift_insufficient" in insufficient_gate["watch_reasons"],
         "Insufficient pivot shift should be reported",
     )
+    assert_true(
+        "pivot_shift_near_confirmation" in insufficient_gate["watch_reasons"],
+        "Near-confirmation pivot shift should be reported",
+    )
+    assert_true("pivot_shift_building" in building_gate["watch_reasons"], "Building pivot shift should be reported")
+    assert_true("pivot_shift_early" in early_gate["watch_reasons"], "Early pivot shift should be reported")
     assert_true(adverse_gate["status"] == "BLOCK", "Adverse pivot shift should block")
     assert_true("adverse_pivot_shift" in adverse_gate["blockers"], "Adverse pivot shift should be a blocker")
     assert_true("pivot_shift_adverse" in adverse_gate["watch_reasons"], "Adverse pivot shift should be reported")
