@@ -69,6 +69,10 @@ def summary_row(result: dict[str, Any]) -> dict[str, Any]:
     top_watch = (gate.get("top_watch_reasons") or [{}])[0].get("name")
     top_allowed_non_entry = (gate.get("top_allowed_non_entry_reasons") or [{}])[0].get("name")
     action_by_status = gate.get("action_by_status", {})
+    pivot_shift_buckets = gate.get("pivot_shift_progress_buckets", {})
+    top_pivot_shift_bucket = None
+    if pivot_shift_buckets:
+        top_pivot_shift_bucket = max(pivot_shift_buckets.items(), key=lambda item: int(item[1]))[0]
     return {
         "symbol": result.get("symbol"),
         "asset_class": result.get("asset_class"),
@@ -90,6 +94,7 @@ def summary_row(result: dict[str, Any]) -> dict[str, Any]:
         "block_rate": gate.get("block_rate"),
         "top_blocker": top_blocker,
         "top_watch_reason": top_watch,
+        "top_pivot_shift_bucket": top_pivot_shift_bucket,
         "top_allowed_non_entry_reason": top_allowed_non_entry,
         "validation_notes": gate.get("validation_notes", []),
     }
@@ -110,7 +115,7 @@ def print_summary(rows: list[dict[str, Any]]) -> None:
             "allow_rate={allow_rate} watch_rate={watch_rate} block_rate={block_rate} "
             "allowed_entries={allowed_entries} allowed_non_entries={allowed_non_entries} "
             "top_allowed_non_entry_reason={top_allowed_non_entry_reason} top_blocker={top_blocker} "
-            "top_watch_reason={top_watch_reason}".format(**row)
+            "top_watch_reason={top_watch_reason} top_pivot_shift_bucket={top_pivot_shift_bucket}".format(**row)
         )
 
 

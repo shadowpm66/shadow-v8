@@ -18,7 +18,7 @@ from shadow_v8.structure.vcp_engine import VcpEngine
 from shadow_v8.structure.wm_detector import WmDetector
 
 
-REPLAY_SCHEMA_VERSION = "1.5.10"
+REPLAY_SCHEMA_VERSION = "1.5.11"
 
 
 class Replay:
@@ -244,6 +244,8 @@ class Replay:
         warning_counter: Counter[str] = Counter()
         watch_reason_counter: Counter[str] = Counter()
         confirmation_counter: Counter[str] = Counter()
+        pivot_shift_bucket_counter: Counter[str] = Counter()
+        pivot_shift_bucket_by_status: dict[str, Counter[str]] = {}
         action_by_status: Counter[str] = Counter()
         allowed_non_entry_counter: Counter[str] = Counter()
         blocked_samples: list[dict[str, Any]] = []
@@ -268,6 +270,9 @@ class Replay:
             watch_reason_counter.update(watch_reasons)
             warning_counter.update(warnings)
             confirmation_counter.update(confirmations)
+            for bucket in self._pivot_shift_buckets_from_reasons(watch_reasons):
+                pivot_shift_bucket_counter[bucket] += 1
+                pivot_shift_bucket_by_status.setdefault(status, Counter())[bucket] += 1
 
             if record_type == "skipped" and status == "ALLOW":
                 reason = str(record.get("reason") or "unknown_non_entry_reason")
@@ -320,11 +325,33 @@ class Replay:
             "top_watch_reasons": self._top_counts(watch_reason_counter),
             "top_warnings": self._top_counts(warning_counter),
             "top_confirmations": self._top_counts(confirmation_counter),
+            "pivot_shift_progress_buckets": dict(sorted(pivot_shift_bucket_counter.items())),
+            "pivot_shift_progress_buckets_by_status": {
+                status: dict(sorted(counter.items())) for status, counter in sorted(pivot_shift_bucket_by_status.items())
+            },
             "top_allowed_non_entry_reasons": self._top_counts(allowed_non_entry_counter),
             "blocked_samples": blocked_samples,
             "allowed_non_entry_samples": allowed_non_entry_samples,
             "validation_notes": self._gate_validation_notes(evaluated, allowed, watched, blocked, blocker_counter, watch_reason_counter),
         }
+
+    def _pivot_shift_buckets_from_reasons(self, watch_reasons: list[str]) -> list[str]:
+        buckets: list[str] = []
+        reason_set = set(watch_reasons)
+        if "pivot_shift_adverse" in reason_set:
+            buckets.append("adverse")
+        if "pivot_shift_near_confirmation" in reason_set:
+            buckets.append("near_confirmation")
+        if "pivot_shift_building" in reason_set:
+            buckets.append("building")
+        if "pivot_shift_early" in reason_set:
+            buckets.append("early")
+        if "pivot_shift_insufficient" in reason_set and not any(
+            reason in reason_set
+            for reason in ("pivot_shift_near_confirmation", "pivot_shift_building", "pivot_shift_early")
+        ):
+            buckets.append("insufficient_unbucketed")
+        return buckets
 
     def _gate_from_record(self, record: dict[str, Any]) -> dict[str, Any]:
         confirmation = record.get("confirmation") or {}
