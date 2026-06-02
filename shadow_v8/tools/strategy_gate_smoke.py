@@ -240,6 +240,42 @@ def check_pivot_watch_reason_details() -> None:
         assert_true(expected_reason in gate["watch_reasons"], f"{label} should report {expected_reason}")
 
 
+def check_base_vcp_watch_reason_details() -> None:
+    weak_base = BaseState(
+        found=True,
+        pivot=100.0,
+        quality_score=48.0,
+        metadata={"confirmed": False, "near_pivot": False, "stop_distance_quality": "WIDE", "stop_distance_pct": 9.0},
+    )
+    weak_vcp = VcpState(
+        is_tight=False,
+        tightness_score=28.0,
+        contraction_count=0,
+        volume_dry=False,
+        higher_lows=False,
+        stop_distance_quality="WIDE",
+        metadata={"near_pivot": False},
+    )
+    setup = Scorer().score(
+        "BASEVCP",
+        stage(),
+        weak_base,
+        weak_vcp,
+        structure(),
+        nested(),
+        pivot(),
+        context=context(),
+    )
+    gate = setup.metadata["trade_gate"]
+    assert_true(gate["status"] == "BLOCK", "Wide stop base/VCP setup should be blocked")
+    assert_true("base_not_confirmed" in gate["watch_reasons"], "Gate should report unconfirmed base")
+    assert_true("vcp_not_tight" in gate["watch_reasons"], "Gate should report loose VCP")
+    assert_true("vcp_no_contraction" in gate["watch_reasons"], "Gate should report missing contractions")
+    assert_true("vcp_direction_not_constructive" in gate["watch_reasons"], "Gate should report direction mismatch")
+    assert_true("vcp_not_near_pivot" in gate["watch_reasons"], "Gate should report pivot distance")
+    assert_true("stop_distance_not_valid" in gate["watch_reasons"], "Gate should report invalid stop distance")
+
+
 def check_short_pivot_awaiting_loss_reason() -> None:
     short_stage = StageState(
         weekly_stage=Stage.STAGE_4,
@@ -349,6 +385,7 @@ def main() -> None:
     check_approved_gate()
     check_watch_gate()
     check_pivot_watch_reason_details()
+    check_base_vcp_watch_reason_details()
     check_short_pivot_awaiting_loss_reason()
     check_pivot_state_precedes_retest_hold()
     check_blocked_gate()
@@ -362,6 +399,7 @@ def main() -> None:
     print("mixed_reference_gate=MONITOR")
     print("stacked_reference_gate=SKIP")
     print("pivot_watch_reasons=granular")
+    print("base_vcp_watch_reasons=granular")
     print("directional_pivot_states=enabled")
 
 
