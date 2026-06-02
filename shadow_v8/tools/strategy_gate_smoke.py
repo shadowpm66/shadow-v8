@@ -276,6 +276,49 @@ def check_base_vcp_watch_reason_details() -> None:
     assert_true("stop_distance_not_valid" in gate["watch_reasons"], "Gate should report invalid stop distance")
 
 
+def check_close_compression_base_needs_vcp_confirmation() -> None:
+    close_compression_base = BaseState(
+        found=True,
+        pivot=100.0,
+        quality_score=82.0,
+        metadata={
+            "confirmed": True,
+            "near_pivot": True,
+            "stop_distance_quality": "GOOD",
+            "stop_distance_pct": 1.5,
+            "confirmation_mode": "close_compression",
+        },
+    )
+    weak_vcp = VcpState(
+        is_tight=False,
+        tightness_score=42.0,
+        contraction_count=1,
+        volume_dry=False,
+        higher_lows=False,
+        stop_distance_quality="GOOD",
+        metadata={"near_pivot": True},
+    )
+    setup = Scorer().score(
+        "CLOSEBASE",
+        stage(),
+        close_compression_base,
+        weak_vcp,
+        structure(),
+        nested(),
+        pivot(),
+        context=context(),
+    )
+    gate = setup.metadata["trade_gate"]
+    risk = RiskManager().evaluate(asset(), setup)
+    entry = EntryPolicy().decide(asset(), setup, risk)
+    assert_true(gate["status"] == "WATCH", "Close compression base should need VCP confirmation")
+    assert_true(
+        "close_compression_needs_vcp_confirmation" in gate["watch_reasons"],
+        "Gate should report close compression needs VCP confirmation",
+    )
+    assert_true(entry.action == "MONITOR", "Close compression without VCP confirmation should monitor")
+
+
 def check_short_pivot_awaiting_loss_reason() -> None:
     short_stage = StageState(
         weekly_stage=Stage.STAGE_4,
@@ -386,6 +429,7 @@ def main() -> None:
     check_watch_gate()
     check_pivot_watch_reason_details()
     check_base_vcp_watch_reason_details()
+    check_close_compression_base_needs_vcp_confirmation()
     check_short_pivot_awaiting_loss_reason()
     check_pivot_state_precedes_retest_hold()
     check_blocked_gate()
@@ -400,6 +444,7 @@ def main() -> None:
     print("stacked_reference_gate=SKIP")
     print("pivot_watch_reasons=granular")
     print("base_vcp_watch_reasons=granular")
+    print("close_compression_gate=guarded")
     print("directional_pivot_states=enabled")
 
 

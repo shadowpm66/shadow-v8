@@ -218,6 +218,9 @@ class Scorer:
             "tight_close_count": int(base.metadata.get("tight_close_count", 0)) if base.metadata else 0,
             "min_tight_closes": int(base.metadata.get("min_tight_closes", 0)) if base.metadata else 0,
             "range_tight": bool(base.metadata.get("range_tight")) if base.metadata else False,
+            "close_range_tight": bool(base.metadata.get("close_range_tight")) if base.metadata else False,
+            "tight_structure": bool(base.metadata.get("tight_structure")) if base.metadata else False,
+            "confirmation_mode": base.metadata.get("confirmation_mode", "none") if base.metadata else "none",
             "range_atr_multiple": base.metadata.get("range_atr_multiple") if base.metadata else None,
             "tight_range_atr_mult": base.metadata.get("tight_range_atr_mult") if base.metadata else None,
             "close_tight_pct": base.metadata.get("close_tight_pct") if base.metadata else None,
@@ -277,6 +280,7 @@ class Scorer:
         vcp: VcpState,
         direction: str,
         stop_distance_quality: str,
+        base_mode: str = "none",
     ) -> list[str]:
         reasons: list[str] = []
         base_confirmed = bool(base.metadata.get("confirmed")) if base.metadata else False
@@ -284,6 +288,8 @@ class Scorer:
             reasons.append("base_not_found")
         elif not base_confirmed:
             reasons.append("base_not_confirmed")
+        elif base_mode == "close_compression":
+            reasons.append("close_compression_needs_vcp_confirmation")
 
         if not vcp.is_tight:
             reasons.append("vcp_not_tight")
@@ -370,13 +376,16 @@ class Scorer:
                 confirmations.append("stage_short_permission")
 
         base_confirmed = bool(base.metadata.get("confirmed")) if base.metadata else False
-        constructive_base_or_vcp = base_confirmed or vcp.is_tight or self._constructive_vcp(
-            vcp, structure.direction, stop_distance_quality
-        )
+        constructive_vcp = self._constructive_vcp(vcp, structure.direction, stop_distance_quality)
+        base_mode = str(base.metadata.get("confirmation_mode", "none")) if base.metadata else "none"
+        high_confidence_base = base_confirmed and (base_mode != "close_compression" or constructive_vcp)
+        constructive_base_or_vcp = high_confidence_base or vcp.is_tight or constructive_vcp
         if constructive_base_or_vcp:
             confirmations.append("constructive_base_or_vcp")
         else:
-            watch_reasons.extend(self._base_vcp_watch_reasons(base, vcp, structure.direction, stop_distance_quality))
+            watch_reasons.extend(
+                self._base_vcp_watch_reasons(base, vcp, structure.direction, stop_distance_quality, base_mode)
+            )
 
         if pivot.confirmed:
             confirmations.append("pivot_confirmed")
