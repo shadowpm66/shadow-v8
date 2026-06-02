@@ -45,6 +45,7 @@ class BaseEngine:
             range_tight = atr_value > 0 and recent_range <= atr_value * self.tight_range_atr_mult
             closes = [c.close for c in recent]
             close_tight_pct = ((max(closes) - min(closes)) / max(last, 1e-9)) * 100.0
+            close_range_tight = close_tight_pct <= 1.25
             close_position = (last - low) / max(high - low, 1e-9)
             near_pivot = last >= high - (high - low) * 0.25 if direction == "LONG" else last <= low + (high - low) * 0.25
             support_rising = self._higher_lows(sample)
@@ -60,9 +61,11 @@ class BaseEngine:
             tight_closes = self._tight_close_count(sample)
             stop_distance_pct = self._stop_distance_pct(last, high, low, direction)
             stop_distance_quality = self._stop_distance_quality(stop_distance_pct)
+            tight_structure = range_tight or close_range_tight
             confirmation_missing: list[str] = []
-            if not range_tight:
+            if not tight_structure:
                 confirmation_missing.append("range_not_tight")
+                confirmation_missing.append("close_range_not_tight")
             if tight_closes < self.min_tight_closes:
                 confirmation_missing.append("not_enough_tight_closes")
             if not near_pivot:
@@ -70,7 +73,7 @@ class BaseEngine:
             if stop_distance_quality not in ("GOOD", "ACCEPTABLE"):
                 confirmation_missing.append("stop_distance_not_valid")
             base_confirmed = (
-                range_tight
+                tight_structure
                 and tight_closes >= self.min_tight_closes
                 and near_pivot
                 and stop_distance_quality in ("GOOD", "ACCEPTABLE")
@@ -126,9 +129,12 @@ class BaseEngine:
                     "confirmed": base_confirmed,
                     "close_position_in_base": round(close_position, 3),
                     "close_tight_pct": round(close_tight_pct, 3),
+                    "close_range_tight": close_range_tight,
                     "tight_close_count": tight_closes,
                     "min_tight_closes": self.min_tight_closes,
                     "range_tight": range_tight,
+                    "tight_structure": tight_structure,
+                    "confirmation_mode": "wick_range" if range_tight else "close_compression" if close_range_tight else "none",
                     "range_atr_multiple": round(recent_range / atr_value, 3) if atr_value > 0 else None,
                     "tight_range_atr_mult": self.tight_range_atr_mult,
                     "near_pivot": near_pivot,
