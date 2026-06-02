@@ -51,7 +51,7 @@ def check_replay_fixture() -> dict:
     fixture_asset, fixture_candles, min_bars = load_fixture()
     result = Replay(asset=fixture_asset, candles=fixture_candles, min_bars=min_bars).run()
     assert_true(result["ok"] is True, "Replay fixture result should be ok=True")
-    assert_true(result["schema_version"] == "1.5.3", "Replay result should include schema_version")
+    assert_true(result["schema_version"] == "1.5.4", "Replay result should include schema_version")
     assert_true("metrics" in result, "Replay result should include metrics")
     assert_true("breakdowns" in result, "Replay result should include breakdowns")
     assert_true("gate_analytics" in result, "Replay result should include gate analytics")
@@ -77,6 +77,8 @@ def check_replay_fixture() -> dict:
     assert_true("contraction_count" in vcp, "VCP confirmation should include contraction count")
     assert_true("volume_dry_up" in vcp, "VCP confirmation should include volume dry-up")
     assert_true("breakout_volume" in vcp, "VCP confirmation should include breakout volume")
+    assert_true("direction_constructive" in vcp, "VCP confirmation should include direction constructive flag")
+    assert_true("confirmation_missing" in vcp, "VCP confirmation should include missing confirmation reasons")
     context = result["skipped_setups"][0]["confirmation"]["context"]
     assert_true("quality_score" in context, "Context confirmation should include quality score")
     assert_true("nearest_zones" in context, "Context confirmation should include nearest zones")

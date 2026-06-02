@@ -252,6 +252,7 @@ class Scorer:
             "volume_dry_up_ratio": vcp.metadata.get("volume_dry_up_ratio"),
             "higher_lows": vcp.higher_lows,
             "lower_highs": vcp.lower_highs,
+            "direction_constructive": bool(vcp.metadata.get("direction_constructive")),
             "atr_compressing": bool(vcp.metadata.get("atr_compressing")),
             "atr_compression_pct": vcp.metadata.get("atr_compression_pct"),
             "range_contracted_pct": vcp.metadata.get("range_contracted_pct"),
@@ -259,6 +260,7 @@ class Scorer:
             "near_pivot": bool(vcp.metadata.get("near_pivot")),
             "ranges": vcp.metadata.get("ranges", []),
             "average_volumes": vcp.metadata.get("average_volumes", []),
+            "confirmation_missing": list(vcp.metadata.get("confirmation_missing", [])),
         }
 
     def _constructive_vcp(self, vcp: VcpState, direction: str, stop_distance_quality: str) -> bool:
