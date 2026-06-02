@@ -255,6 +255,10 @@ class Scorer:
             "higher_lows": vcp.higher_lows,
             "lower_highs": vcp.lower_highs,
             "direction_constructive": bool(vcp.metadata.get("direction_constructive")),
+            "directional_close_shift": bool(vcp.metadata.get("directional_close_shift")),
+            "directional_evidence": vcp.metadata.get("directional_evidence", "none"),
+            "close_trend_pct": vcp.metadata.get("close_trend_pct"),
+            "last_close_shift_pct": vcp.metadata.get("last_close_shift_pct"),
             "atr_compressing": bool(vcp.metadata.get("atr_compressing")),
             "atr_compression_pct": vcp.metadata.get("atr_compression_pct"),
             "range_contracted_pct": vcp.metadata.get("range_contracted_pct"),
@@ -311,6 +315,8 @@ class Scorer:
             reasons.append("vcp_direction_not_constructive")
             if bool(vcp.metadata.get("is_near_tight")):
                 reasons.append("vcp_near_tight_needs_direction")
+                if bool(vcp.metadata.get("directional_close_shift")):
+                    reasons.append("vcp_near_tight_has_close_shift")
         if not bool(vcp.metadata.get("near_pivot")):
             reasons.append("vcp_not_near_pivot")
         if stop_distance_quality not in ("GOOD", "ACCEPTABLE"):
