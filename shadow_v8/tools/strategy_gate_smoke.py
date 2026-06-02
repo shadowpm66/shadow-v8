@@ -480,11 +480,17 @@ def check_pivot_shift_progress_reasons() -> None:
     )
     insufficient_gate = insufficient_setup.metadata["trade_gate"]
     adverse_gate = adverse_setup.metadata["trade_gate"]
+    adverse_risk = RiskManager().evaluate(asset(), adverse_setup)
+    adverse_entry = EntryPolicy().decide(asset(), adverse_setup, adverse_risk)
+    assert_true(insufficient_gate["status"] == "WATCH", "Insufficient pivot shift should remain watch")
     assert_true(
         "pivot_shift_insufficient" in insufficient_gate["watch_reasons"],
         "Insufficient pivot shift should be reported",
     )
+    assert_true(adverse_gate["status"] == "BLOCK", "Adverse pivot shift should block")
+    assert_true("adverse_pivot_shift" in adverse_gate["blockers"], "Adverse pivot shift should be a blocker")
     assert_true("pivot_shift_adverse" in adverse_gate["watch_reasons"], "Adverse pivot shift should be reported")
+    assert_true(adverse_entry.action == "SKIP", "Adverse pivot shift should skip entry")
 
 
 def check_mixed_reference_watch_gate() -> None:
