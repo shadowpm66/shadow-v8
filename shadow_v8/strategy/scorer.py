@@ -257,6 +257,7 @@ class Scorer:
             "direction_constructive": bool(vcp.metadata.get("direction_constructive")),
             "directional_close_shift": bool(vcp.metadata.get("directional_close_shift")),
             "directional_evidence": vcp.metadata.get("directional_evidence", "none"),
+            "developing_directional": self._developing_directional_vcp(vcp, vcp.stop_distance_quality),
             "close_trend_pct": vcp.metadata.get("close_trend_pct"),
             "last_close_shift_pct": vcp.metadata.get("last_close_shift_pct"),
             "atr_compressing": bool(vcp.metadata.get("atr_compressing")),
@@ -278,6 +279,15 @@ class Scorer:
         return (
             vcp.contraction_count >= 1
             and direction_ok
+            and bool(vcp.metadata.get("near_pivot"))
+            and stop_distance_quality in ("GOOD", "ACCEPTABLE")
+        )
+
+    def _developing_directional_vcp(self, vcp: VcpState, stop_distance_quality: str) -> bool:
+        return (
+            bool(vcp.metadata.get("is_near_tight"))
+            and bool(vcp.metadata.get("directional_close_shift"))
+            and vcp.contraction_count >= 2
             and bool(vcp.metadata.get("near_pivot"))
             and stop_distance_quality in ("GOOD", "ACCEPTABLE")
         )
@@ -311,12 +321,15 @@ class Scorer:
             or (direction == "SHORT" and vcp.lower_highs)
             or direction == "FLAT"
         )
+        developing_directional = self._developing_directional_vcp(vcp, stop_distance_quality)
         if not direction_ok:
             reasons.append("vcp_direction_not_constructive")
             if bool(vcp.metadata.get("is_near_tight")):
                 reasons.append("vcp_near_tight_needs_direction")
                 if bool(vcp.metadata.get("directional_close_shift")):
                     reasons.append("vcp_near_tight_has_close_shift")
+                    if developing_directional:
+                        reasons.append("developing_directional_vcp")
         if not bool(vcp.metadata.get("near_pivot")):
             reasons.append("vcp_not_near_pivot")
         if stop_distance_quality not in ("GOOD", "ACCEPTABLE"):
@@ -395,6 +408,7 @@ class Scorer:
 
         base_confirmed = bool(base.metadata.get("confirmed")) if base.metadata else False
         constructive_vcp = self._constructive_vcp(vcp, structure.direction, stop_distance_quality)
+        developing_directional_vcp = self._developing_directional_vcp(vcp, stop_distance_quality)
         base_mode = str(base.metadata.get("confirmation_mode", "none")) if base.metadata else "none"
         high_confidence_base = base_confirmed and (base_mode != "close_compression" or constructive_vcp)
         constructive_base_or_vcp = high_confidence_base or vcp.is_tight or constructive_vcp
@@ -404,6 +418,8 @@ class Scorer:
             watch_reasons.extend(
                 self._base_vcp_watch_reasons(base, vcp, structure.direction, stop_distance_quality, base_mode)
             )
+            if developing_directional_vcp:
+                confirmations.append("developing_directional_vcp")
 
         if pivot.confirmed:
             confirmations.append("pivot_confirmed")

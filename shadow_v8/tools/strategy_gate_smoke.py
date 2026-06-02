@@ -319,6 +319,60 @@ def check_close_compression_base_needs_vcp_confirmation() -> None:
     assert_true(entry.action == "MONITOR", "Close compression without VCP confirmation should monitor")
 
 
+def check_developing_directional_vcp_watch() -> None:
+    developing_vcp = VcpState(
+        is_tight=False,
+        tightness_score=58.0,
+        contraction_count=2,
+        volume_dry=False,
+        higher_lows=False,
+        stop_distance_quality="GOOD",
+        metadata={
+            "near_pivot": True,
+            "is_near_tight": True,
+            "directional_close_shift": True,
+            "directional_evidence": "close_shift",
+            "breakout_volume": True,
+        },
+    )
+    developing_pivot = PivotConfirmation(
+        pivot=100.0,
+        reclaimed_or_lost=True,
+        retested=True,
+        retest_hold=True,
+        confirmed=False,
+        metadata={"state": "awaiting_shift_away"},
+    )
+    setup = Scorer().score(
+        "DEVVCP",
+        stage(),
+        BaseState(found=False),
+        developing_vcp,
+        structure(),
+        nested(),
+        developing_pivot,
+        context=context(),
+    )
+    gate = setup.metadata["trade_gate"]
+    risk = RiskManager().evaluate(asset(), setup)
+    entry = EntryPolicy().decide(asset(), setup, risk)
+    vcp_confirmation = setup.metadata["vcp_confirmation"]
+    assert_true(gate["status"] == "WATCH", "Developing directional VCP should stay in watch state")
+    assert_true(
+        "developing_directional_vcp" in gate["confirmations"],
+        "Gate should mark developing directional VCP as a confirmation",
+    )
+    assert_true(
+        "developing_directional_vcp" in gate["watch_reasons"],
+        "Gate should explain developing directional VCP watch",
+    )
+    assert_true(
+        vcp_confirmation["developing_directional"] is True,
+        "VCP confirmation should expose developing directional flag",
+    )
+    assert_true(entry.action == "MONITOR", "Developing directional VCP should monitor, not enter")
+
+
 def check_short_pivot_awaiting_loss_reason() -> None:
     short_stage = StageState(
         weekly_stage=Stage.STAGE_4,
@@ -430,6 +484,7 @@ def main() -> None:
     check_pivot_watch_reason_details()
     check_base_vcp_watch_reason_details()
     check_close_compression_base_needs_vcp_confirmation()
+    check_developing_directional_vcp_watch()
     check_short_pivot_awaiting_loss_reason()
     check_pivot_state_precedes_retest_hold()
     check_blocked_gate()
@@ -446,6 +501,7 @@ def main() -> None:
     print("base_vcp_watch_reasons=granular")
     print("close_compression_gate=guarded")
     print("directional_pivot_states=enabled")
+    print("developing_directional_vcp=MONITOR")
 
 
 if __name__ == "__main__":
