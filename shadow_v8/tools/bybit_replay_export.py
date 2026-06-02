@@ -151,7 +151,7 @@ def main() -> None:
         print(
             "validation: trades={trades} net_r={net_r} allow_rate={allow_rate} "
             "watch_rate={watch_rate} block_rate={block_rate} top_blocker={top_blocker} "
-            "top_watch_reason={top_watch_reason}".format(**row)
+            "top_watch_reason={top_watch_reason} top_pivot_shift_bucket={top_pivot_shift_bucket}".format(**row)
         )
 
 
