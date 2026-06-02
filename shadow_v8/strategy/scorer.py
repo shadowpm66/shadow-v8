@@ -245,6 +245,8 @@ class Scorer:
         return {
             "is_tight": vcp.is_tight,
             "tightness_score": round(vcp.tightness_score, 4),
+            "is_near_tight": bool(vcp.metadata.get("is_near_tight")),
+            "development_stage": vcp.metadata.get("development_stage", "unknown"),
             "contraction_count": vcp.contraction_count,
             "volume_dry_up": vcp.volume_dry,
             "breakout_volume": bool(vcp.metadata.get("breakout_volume")),
@@ -295,6 +297,8 @@ class Scorer:
 
         if not vcp.is_tight:
             reasons.append("vcp_not_tight")
+            if bool(vcp.metadata.get("is_near_tight")):
+                reasons.append("vcp_near_tight")
         if vcp.contraction_count < 1:
             reasons.append("vcp_no_contraction")
 
@@ -305,10 +309,16 @@ class Scorer:
         )
         if not direction_ok:
             reasons.append("vcp_direction_not_constructive")
+            if bool(vcp.metadata.get("is_near_tight")):
+                reasons.append("vcp_near_tight_needs_direction")
         if not bool(vcp.metadata.get("near_pivot")):
             reasons.append("vcp_not_near_pivot")
         if stop_distance_quality not in ("GOOD", "ACCEPTABLE"):
             reasons.append("stop_distance_not_valid")
+        if bool(vcp.metadata.get("is_near_tight")) and not (
+            vcp.volume_dry or bool(vcp.metadata.get("breakout_volume"))
+        ):
+            reasons.append("vcp_near_tight_needs_volume")
         return reasons or ["immature_base_or_vcp"]
 
     def _nested_confirmation(self, nested: NestedStructureState) -> dict:
