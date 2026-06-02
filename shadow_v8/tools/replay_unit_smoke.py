@@ -51,7 +51,7 @@ def check_replay_fixture() -> dict:
     fixture_asset, fixture_candles, min_bars = load_fixture()
     result = Replay(asset=fixture_asset, candles=fixture_candles, min_bars=min_bars).run()
     assert_true(result["ok"] is True, "Replay fixture result should be ok=True")
-    assert_true(result["schema_version"] == "1.5.7", "Replay result should include schema_version")
+    assert_true(result["schema_version"] == "1.5.8", "Replay result should include schema_version")
     assert_true("metrics" in result, "Replay result should include metrics")
     assert_true("breakdowns" in result, "Replay result should include breakdowns")
     assert_true("gate_analytics" in result, "Replay result should include gate analytics")
@@ -65,6 +65,11 @@ def check_replay_fixture() -> dict:
     assert_true("nested" in result["skipped_setups"][0]["confirmation"], "Confirmation should include nested fields")
     assert_true("context" in result["skipped_setups"][0]["confirmation"], "Confirmation should include context fields")
     assert_true("trade_gate" in result["skipped_setups"][0]["confirmation"], "Confirmation should include trade gate fields")
+    pivot = result["skipped_setups"][0]["confirmation"]["pivot"]
+    assert_true("shift_progress_state" in pivot, "Pivot confirmation should include shift progress state")
+    assert_true("shift_progress" in pivot, "Pivot confirmation should include shift progress")
+    assert_true("shift_required_atr" in pivot, "Pivot confirmation should include required ATR shift")
+    assert_true("shift_distance_atr" in pivot, "Pivot confirmation should include shift distance ATR")
     base = result["skipped_setups"][0]["confirmation"]["base"]
     assert_true("range_tight" in base, "Base confirmation should include range tight flag")
     assert_true("close_range_tight" in base, "Base confirmation should include close range tight flag")

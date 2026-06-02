@@ -238,6 +238,10 @@ class Scorer:
             "shift_away": pivot.shift_away,
             "confirmed": pivot.confirmed,
             "shift_strength": round(pivot.shift_strength, 4),
+            "shift_progress_state": (pivot.metadata or {}).get("shift_progress_state"),
+            "shift_progress": (pivot.metadata or {}).get("shift_progress"),
+            "shift_required_atr": (pivot.metadata or {}).get("shift_required_atr"),
+            "shift_distance_atr": (pivot.metadata or {}).get("shift_distance_atr"),
             "metadata": pivot.metadata,
         }
 
@@ -435,6 +439,11 @@ class Scorer:
                 watch_reasons.append("pivot_retest_failed")
             elif pivot_state == "awaiting_shift_away" or pivot.retest_hold:
                 watch_reasons.append("pivot_waiting_for_shift_away")
+                shift_progress_state = str((pivot.metadata or {}).get("shift_progress_state") or "")
+                if shift_progress_state == "adverse":
+                    watch_reasons.append("pivot_shift_adverse")
+                elif shift_progress_state in ("insufficient", "not_started"):
+                    watch_reasons.append("pivot_shift_insufficient")
             elif not pivot.reclaimed_or_lost:
                 watch_reasons.append("pivot_not_reclaimed_or_lost")
             elif not pivot.retested:

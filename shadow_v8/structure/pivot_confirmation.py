@@ -67,6 +67,19 @@ class PivotConfirmationEngine:
             state = "no_trade_direction"
         retest_timestamp = retest_candles[-1].timestamp.isoformat() if retest_candles else None
         shift_distance_atr = shift_distance / atr_value if atr_value > 0 else None
+        shift_required = atr_value * self.shift_atr_mult if atr_value > 0 else 0.0
+        shift_required_atr = self.shift_atr_mult if atr_value > 0 else None
+        shift_progress = shift_distance / shift_required if shift_required > 0 else None
+        if shift:
+            shift_progress_state = "confirmed"
+        elif retest_hold and shift_distance < 0:
+            shift_progress_state = "adverse"
+        elif retest_hold and shift_distance > 0:
+            shift_progress_state = "insufficient"
+        elif retest_hold:
+            shift_progress_state = "not_started"
+        else:
+            shift_progress_state = "not_ready"
         distance_to_pivot_pct = distance_to_pivot / max(pivot, 1e-9) * 100.0 if pivot else None
         distance_to_pivot_atr = distance_to_pivot / atr_value if atr_value > 0 else None
         return PivotConfirmation(
@@ -88,6 +101,10 @@ class PivotConfirmationEngine:
                 "atr": round(atr_value, 4) if atr_value else None,
                 "shift_distance": round(shift_distance, 4),
                 "shift_distance_atr": round(shift_distance_atr, 4) if shift_distance_atr is not None else None,
+                "shift_required": round(shift_required, 4) if shift_required else None,
+                "shift_required_atr": round(shift_required_atr, 4) if shift_required_atr is not None else None,
+                "shift_progress": round(shift_progress, 4) if shift_progress is not None else None,
+                "shift_progress_state": shift_progress_state,
                 "distance_to_pivot": round(distance_to_pivot, 4),
                 "distance_to_pivot_pct": round(distance_to_pivot_pct, 4) if distance_to_pivot_pct is not None else None,
                 "distance_to_pivot_atr": round(distance_to_pivot_atr, 4) if distance_to_pivot_atr is not None else None,
