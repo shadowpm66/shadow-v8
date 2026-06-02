@@ -51,7 +51,7 @@ def check_replay_fixture() -> dict:
     fixture_asset, fixture_candles, min_bars = load_fixture()
     result = Replay(asset=fixture_asset, candles=fixture_candles, min_bars=min_bars).run()
     assert_true(result["ok"] is True, "Replay fixture result should be ok=True")
-    assert_true(result["schema_version"] == "1.5.1", "Replay result should include schema_version")
+    assert_true(result["schema_version"] == "1.5.2", "Replay result should include schema_version")
     assert_true("metrics" in result, "Replay result should include metrics")
     assert_true("breakdowns" in result, "Replay result should include breakdowns")
     assert_true("gate_analytics" in result, "Replay result should include gate analytics")
@@ -65,6 +65,10 @@ def check_replay_fixture() -> dict:
     assert_true("nested" in result["skipped_setups"][0]["confirmation"], "Confirmation should include nested fields")
     assert_true("context" in result["skipped_setups"][0]["confirmation"], "Confirmation should include context fields")
     assert_true("trade_gate" in result["skipped_setups"][0]["confirmation"], "Confirmation should include trade gate fields")
+    base = result["skipped_setups"][0]["confirmation"]["base"]
+    assert_true("range_tight" in base, "Base confirmation should include range tight flag")
+    assert_true("range_atr_multiple" in base, "Base confirmation should include range ATR multiple")
+    assert_true("confirmation_missing" in base, "Base confirmation should include missing confirmation reasons")
     vcp = result["skipped_setups"][0]["confirmation"]["vcp"]
     assert_true("tightness_score" in vcp, "VCP confirmation should include tightness score")
     assert_true("contraction_count" in vcp, "VCP confirmation should include contraction count")
@@ -129,6 +133,7 @@ def main() -> None:
     print(f"fixture_action_counts={replay_result['breakdowns']['action_counts']}")
     print(f"fixture_gate_analytics={replay_result['gate_analytics']}")
     print(f"fixture_confirmation_keys={list(replay_result['skipped_setups'][0]['confirmation'].keys())}")
+    print(f"fixture_base_keys={list(replay_result['skipped_setups'][0]['confirmation']['base'].keys())}")
     print(f"fixture_vcp_keys={list(replay_result['skipped_setups'][0]['confirmation']['vcp'].keys())}")
     print(f"fixture_context_keys={list(replay_result['skipped_setups'][0]['confirmation']['context'].keys())}")
     print(f"fixture_trade_gate={replay_result['skipped_setups'][0]['confirmation']['trade_gate']}")
