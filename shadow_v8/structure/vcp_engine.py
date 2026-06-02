@@ -33,6 +33,11 @@ class VcpEngine:
         highs = [max(c.high for c in chunk) for chunk in chunks if chunk]
         higher_lows = len(lows) >= 3 and lows[-1] >= lows[-2] >= lows[-3]
         lower_highs = len(highs) >= 3 and highs[-1] <= highs[-2] <= highs[-3]
+        direction_constructive = (
+            (direction == "LONG" and higher_lows)
+            or (direction == "SHORT" and lower_highs)
+            or (direction == "FLAT" and (higher_lows or lower_highs))
+        )
         last = sample[-1].close
         atr_value = atr(candles) or 0.0
         atr_values = [self._chunk_atr(chunk) for chunk in chunks if len(chunk) >= 2]
@@ -71,6 +76,23 @@ class VcpEngine:
         score += 8.0 if near_pivot else 0.0
         score += 8.0 if stop_quality == "GOOD" else 4.0 if stop_quality == "ACCEPTABLE" else -8.0 if stop_quality == "WIDE" else 0.0
         score = clamp(score, 0.0, 100.0)
+        confirmation_missing: list[str] = []
+        if contraction_count < 1:
+            confirmation_missing.append("vcp_no_contraction")
+        if not direction_constructive:
+            confirmation_missing.append("vcp_direction_not_constructive")
+        if not near_pivot:
+            confirmation_missing.append("vcp_not_near_pivot")
+        if stop_quality not in ("GOOD", "ACCEPTABLE"):
+            confirmation_missing.append("vcp_stop_distance_not_valid")
+        if not volume_dry:
+            confirmation_missing.append("vcp_volume_not_dry")
+        if not breakout_volume:
+            confirmation_missing.append("vcp_breakout_volume_missing")
+        if not atr_compressing:
+            confirmation_missing.append("vcp_atr_not_compressing")
+        if range_contracted_pct < 35.0:
+            confirmation_missing.append("vcp_range_not_contracted")
         return VcpState(
             is_tight=score >= 60.0,
             tightness_score=score,
@@ -93,6 +115,7 @@ class VcpEngine:
                 "ranges": [round(r, 4) for r in ranges],
                 "average_volumes": [round(v, 2) for v in vols],
                 "direction": direction,
+                "direction_constructive": direction_constructive,
                 "range_contracted_pct": round(range_contracted_pct, 2),
                 "atr_values": [round(value, 4) for value in atr_values],
                 "atr_compression_pct": round(atr_compression_pct, 2),
@@ -103,6 +126,7 @@ class VcpEngine:
                 "breakout_volume": breakout_volume,
                 "stop_distance_pct": round(stop_distance_pct, 3) if stop_distance_pct is not None else None,
                 "atr": round(atr_value, 4) if atr_value else None,
+                "confirmation_missing": confirmation_missing,
             },
         )
 
