@@ -442,6 +442,7 @@ class Scorer:
                 shift_progress_state = str((pivot.metadata or {}).get("shift_progress_state") or "")
                 if shift_progress_state == "adverse":
                     watch_reasons.append("pivot_shift_adverse")
+                    blockers.append("adverse_pivot_shift")
                 elif shift_progress_state in ("insufficient", "not_started"):
                     watch_reasons.append("pivot_shift_insufficient")
             elif not pivot.reclaimed_or_lost:
