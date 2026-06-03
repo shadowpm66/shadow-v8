@@ -69,6 +69,22 @@ class EntryPolicy:
         required_confirmations = {"constructive_base_or_vcp", "volume_quality"}
         if not required_confirmations.issubset(confirmations):
             return False
+        if "context_supportive" not in confirmations:
+            return False
+        vcp = setup.metadata.get("vcp_confirmation") or {}
+        if not bool(vcp.get("directional_close_shift")):
+            return False
+        pivot = setup.metadata.get("pivot_confirmation") or {}
+        pivot_metadata = pivot.get("metadata") or {}
+        shift_state = str(pivot.get("shift_progress_state") or pivot_metadata.get("shift_progress_state") or "")
+        shift_bucket = str(pivot.get("shift_progress_bucket") or pivot_metadata.get("shift_progress_bucket") or "")
+        if shift_state in {"adverse", "not_ready"} or shift_bucket == "not_ready":
+            return False
+        shift_progress = pivot.get("shift_progress")
+        if shift_progress is None:
+            shift_progress = pivot_metadata.get("shift_progress")
+        if shift_progress is not None and float(shift_progress) < 0:
+            return False
         if not any(item.startswith("stage_") and item.endswith("_permission") for item in confirmations):
             return False
         if not any(item in confirmations for item in ("stop_distance_good", "stop_distance_acceptable")):
