@@ -51,7 +51,7 @@ def check_replay_fixture() -> dict:
     fixture_asset, fixture_candles, min_bars = load_fixture()
     result = Replay(asset=fixture_asset, candles=fixture_candles, min_bars=min_bars).run()
     assert_true(result["ok"] is True, "Replay fixture result should be ok=True")
-    assert_true(result["schema_version"] == "1.5.13", "Replay result should include schema_version")
+    assert_true(result["schema_version"] == "1.5.14", "Replay result should include schema_version")
     assert_true("metrics" in result, "Replay result should include metrics")
     assert_true("breakdowns" in result, "Replay result should include breakdowns")
     assert_true("gate_analytics" in result, "Replay result should include gate analytics")
@@ -104,10 +104,13 @@ def check_replay_fixture() -> dict:
     assert_true("status" in gate, "Trade gate should include status")
     assert_true("blockers" in gate, "Trade gate should include blockers")
     assert_true("watch_reasons" in gate, "Trade gate should include watch reasons")
+    assert_true("stage" in gate, "Trade gate should include stage diagnostics")
     analytics = result["gate_analytics"]
     assert_true(analytics["evaluated_setups"] > 0, "Gate analytics should count evaluated setups")
     assert_true("watched_setups" in analytics, "Gate analytics should count watched setups")
     assert_true("top_watch_reasons" in analytics, "Gate analytics should include top watch reasons")
+    assert_true("top_stage_block_reasons" in analytics, "Gate analytics should include stage block reasons")
+    assert_true("stage_pairs" in analytics, "Gate analytics should include stage pair counts")
     assert_true("pivot_shift_progress_buckets" in analytics, "Gate analytics should include pivot shift buckets")
     assert_true(
         "pivot_shift_progress_buckets_by_status" in analytics,

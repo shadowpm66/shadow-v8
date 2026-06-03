@@ -117,10 +117,13 @@ def build_tuning_hints(
         hints.append("investigate_zero_trade_symbols")
 
     top_blockers = count_values(validation_rows, "top_blocker")
+    top_stage_blocks = count_values(validation_rows, "top_stage_block_reason")
     top_watch = count_values(validation_rows, "top_watch_reason")
     top_shift = count_values(validation_rows, "top_pivot_shift_bucket")
     if top_blockers:
         hints.append(f"tune_blocker:{next(iter(top_blockers))}")
+    if top_stage_blocks:
+        hints.append(f"tune_stage:{next(iter(top_stage_blocks))}")
     if top_watch:
         hints.append(f"tune_watch:{next(iter(top_watch))}")
     if top_shift:
@@ -147,6 +150,7 @@ def summarize_batch(
         "worst_net_r": validation_ranked[-1] if validation_ranked else None,
         "zero_trade_symbols": zero_trade_symbols,
         "top_blockers": count_values(validation_rows, "top_blocker"),
+        "top_stage_block_reasons": count_values(validation_rows, "top_stage_block_reason"),
         "top_watch_reasons": count_values(validation_rows, "top_watch_reason"),
         "top_pivot_shift_buckets": count_values(validation_rows, "top_pivot_shift_bucket"),
         "top_watch_readiness": count_values(validation_rows, "top_watch_readiness"),
@@ -261,7 +265,10 @@ def main() -> None:
         )
     if validation_rows:
         for row in validation_rows:
-            print("validation: symbol={symbol} trades={trades} net_r={net_r} top_watch={top_watch_reason}".format(**row))
+            print(
+                "validation: symbol={symbol} trades={trades} net_r={net_r} "
+                "top_stage_block={top_stage_block_reason} top_watch={top_watch_reason}".format(**row)
+            )
     if calibration_rows:
         print_calibration_summary(calibration_rows, guard)
     if guard is not None and not guard["ok"]:

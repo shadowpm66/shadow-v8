@@ -498,6 +498,7 @@ class Scorer:
         if earnings and earnings.blocked_for_earnings:
             blockers.append("earnings_block")
 
+        stage_diagnostics = self._stage_gate_diagnostics(stage, structure.direction)
         status = "ALLOW"
         if blockers:
             status = "BLOCK"
@@ -511,6 +512,7 @@ class Scorer:
             "warnings": warnings,
             "confirmations": confirmations,
             "confirmed_count": len(confirmations),
+            "stage": stage_diagnostics,
             "required": [
                 "directional_structure",
                 "stage_permission",
@@ -518,4 +520,35 @@ class Scorer:
                 "pivot_confirmation",
                 "valid_stop_distance",
             ],
+        }
+
+    def _stage_gate_diagnostics(self, stage: StageState, direction: str) -> dict[str, Any]:
+        reasons: list[str] = []
+        if direction == "LONG":
+            if stage.weekly_stage != Stage.STAGE_2:
+                reasons.append("weekly_not_stage2")
+            if stage.daily_stage not in (Stage.STAGE_2, Stage.STAGE_1, Stage.UNKNOWN):
+                reasons.append("daily_not_long_compatible")
+            permission = stage.long_permission
+        elif direction == "SHORT":
+            if stage.weekly_stage != Stage.STAGE_4:
+                reasons.append("weekly_not_stage4")
+            if stage.daily_stage not in (Stage.STAGE_4, Stage.STAGE_3, Stage.UNKNOWN):
+                reasons.append("daily_not_short_compatible")
+            permission = stage.short_permission
+        else:
+            reasons.append("no_direction_for_stage_permission")
+            permission = False
+        if not reasons and permission:
+            reasons.append("stage_permission_confirmed")
+        return {
+            "direction": direction,
+            "weekly_stage": stage.weekly_stage.value,
+            "daily_stage": stage.daily_stage.value,
+            "long_permission": stage.long_permission,
+            "short_permission": stage.short_permission,
+            "risk_bias": stage.risk_bias,
+            "permission": permission,
+            "reasons": reasons,
+            "engine_reasons": stage.reasons,
         }
