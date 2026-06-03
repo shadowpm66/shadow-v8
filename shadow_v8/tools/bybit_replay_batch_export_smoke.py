@@ -57,6 +57,11 @@ def main() -> None:
             assert_true(all(Path(str(item["path"])).exists() for item in exports), "Batch export should write CSV files")
             validation_rows = batch.validate_exports(exports, min_bars=10, allow_short=True)
             assert_true(len(validation_rows) == 3, "Batch validation should produce one row per export")
+            digest = batch.summarize_batch(exports, validation_rows, [], None)
+            assert_true(digest["exported_count"] == 3, "Batch digest should count exports")
+            assert_true(digest["validated_count"] == 3, "Batch digest should count validations")
+            assert_true(digest["best_net_r"] is not None, "Batch digest should expose best net R row")
+            assert_true(digest["worst_net_r"] is not None, "Batch digest should expose worst net R row")
     finally:
         batch.fetch_klines = original_fetch
 
@@ -64,6 +69,7 @@ def main() -> None:
     print("ok=True")
     print("symbols=3")
     print("validation_rows=3")
+    print("digest=enabled")
 
 
 if __name__ == "__main__":
