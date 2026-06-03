@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from shadow_v8.tools.replay_calibration_compare import compare_file
+from shadow_v8.tools.replay_calibration_compare import compare_file, summarize_rows
 from shadow_v8.tools.replay_validate import discover_csv_files
 
 
@@ -23,11 +23,16 @@ def main() -> None:
     assert_true("delta" in row, "Comparison should include delta metrics")
     assert_true("net_r" in row["delta"], "Comparison delta should include net R")
     assert_true(row["verdict"] in ("improved", "unchanged", "worse"), "Comparison should classify verdict")
+    aggregate = summarize_rows([row])
+    assert_true(aggregate["file_count"] == 1, "Aggregate should count compared files")
+    assert_true(aggregate["overall_verdict"] == row["verdict"], "Aggregate should preserve single-file verdict")
+    assert_true(aggregate["verdict_counts"][row["verdict"]] == 1, "Aggregate should count verdicts")
 
     print("Replay calibration compare smoke complete")
     print("ok=True")
     print(f"symbol={row['symbol']}")
     print(f"verdict={row['verdict']}")
+    print(f"overall_verdict={aggregate['overall_verdict']}")
     print(f"baseline_trades={row['baseline']['trades']}")
     print(f"calibrated_trades={row['calibrated']['trades']}")
     print(f"net_r_delta={row['delta']['net_r']}")

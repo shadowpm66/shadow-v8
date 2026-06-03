@@ -77,10 +77,68 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
+def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    verdict_counts = {"improved": 0, "unchanged": 0, "worse": 0}
+    net_r_deltas: list[float] = []
+    trade_deltas: list[int] = []
+    worst_regression: dict[str, Any] | None = None
+    best_improvement: dict[str, Any] | None = None
+
+    for row in rows:
+        verdict = str(row.get("verdict") or "unchanged")
+        verdict_counts[verdict] = verdict_counts.get(verdict, 0) + 1
+        delta = row.get("delta") or {}
+        net_r_delta = delta.get("net_r")
+        trade_delta = int(delta.get("trades") or 0)
+        trade_deltas.append(trade_delta)
+        if net_r_delta is None:
+            continue
+        net_r = float(net_r_delta)
+        net_r_deltas.append(net_r)
+        if worst_regression is None or net_r < float(worst_regression["net_r_delta"]):
+            worst_regression = {"symbol": row.get("symbol"), "net_r_delta": round(net_r, 6)}
+        if best_improvement is None or net_r > float(best_improvement["net_r_delta"]):
+            best_improvement = {"symbol": row.get("symbol"), "net_r_delta": round(net_r, 6)}
+
+    total = len(rows)
+    average_net_r_delta = round(sum(net_r_deltas) / len(net_r_deltas), 6) if net_r_deltas else None
+    average_trade_delta = round(sum(trade_deltas) / len(trade_deltas), 6) if trade_deltas else None
+    if verdict_counts.get("worse", 0):
+        overall_verdict = "worse"
+    elif verdict_counts.get("improved", 0) and not verdict_counts.get("worse", 0):
+        overall_verdict = "improved"
+    else:
+        overall_verdict = "unchanged"
+    return {
+        "file_count": total,
+        "overall_verdict": overall_verdict,
+        "verdict_counts": verdict_counts,
+        "average_net_r_delta": average_net_r_delta,
+        "average_trade_delta": average_trade_delta,
+        "worst_regression": worst_regression,
+        "best_improvement": best_improvement,
+    }
+
+
 def print_summary(rows: list[dict[str, Any]]) -> None:
+    aggregate = summarize_rows(rows)
     print("Replay calibration compare complete")
     print("ok=True")
     print(f"files={len(rows)}")
+    print(
+        "overall_verdict={overall_verdict} improved={improved} unchanged={unchanged} worse={worse} "
+        "average_net_r_delta={average_net_r_delta} average_trade_delta={average_trade_delta} "
+        "worst_regression={worst_regression} best_improvement={best_improvement}".format(
+            overall_verdict=aggregate["overall_verdict"],
+            improved=aggregate["verdict_counts"].get("improved", 0),
+            unchanged=aggregate["verdict_counts"].get("unchanged", 0),
+            worse=aggregate["verdict_counts"].get("worse", 0),
+            average_net_r_delta=aggregate["average_net_r_delta"],
+            average_trade_delta=aggregate["average_trade_delta"],
+            worst_regression=aggregate["worst_regression"],
+            best_improvement=aggregate["best_improvement"],
+        )
+    )
     for row in rows:
         baseline = row["baseline"]
         calibrated = row["calibrated"]
@@ -136,7 +194,7 @@ def main() -> None:
         )
         for path in files
     ]
-    summary = {"ok": True, "file_count": len(files), "results": rows}
+    summary = {"ok": True, "file_count": len(files), "aggregate": summarize_rows(rows), "results": rows}
     if not args.no_write:
         write_json(args.output_dir / "calibration_compare.json", summary)
     print_summary(rows)
