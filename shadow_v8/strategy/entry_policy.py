@@ -4,6 +4,9 @@ from shadow_v8.models import AssetConfig, EntryDecision, RiskDecision, SetupDeci
 
 
 class EntryPolicy:
+    def __init__(self, allow_near_entry_watch: bool = False) -> None:
+        self.allow_near_entry_watch = allow_near_entry_watch
+
     def decide(self, asset: AssetConfig, setup: SetupDecision, risk: RiskDecision) -> EntryDecision:
         gate = setup.metadata.get("trade_gate") or {}
         gate_status = gate.get("status")
@@ -24,6 +27,16 @@ class EntryPolicy:
                 metadata={"trade_gate": gate},
             )
         if gate_status == "WATCH":
+            if self.allow_near_entry_watch and risk.state != "OFF" and self._near_entry_watch(setup, gate):
+                reason = "Near-entry watch override: " + ", ".join(str(item) for item in gate_watch_reasons[:4])
+                return EntryDecision(
+                    "ENTER",
+                    asset.symbol,
+                    setup.direction,
+                    reason,
+                    setup=setup,
+                    metadata={"trade_gate": gate, "near_entry_watch_override": True},
+                )
             reason = "Gate watching: " + ", ".join(str(item) for item in gate_watch_reasons[:4])
             return EntryDecision(
                 "MONITOR",
@@ -40,4 +53,25 @@ class EntryPolicy:
         if setup.grade == "B":
             return EntryDecision("MONITOR", asset.symbol, setup.direction, "Setup close but not A-grade", setup=setup)
         return EntryDecision("WAIT", asset.symbol, setup.direction, "Setup not mature", setup=setup)
+
+    def _near_entry_watch(self, setup: SetupDecision, gate: dict) -> bool:
+        watch_reasons = set(str(item) for item in gate.get("watch_reasons", []))
+        warnings = set(str(item) for item in gate.get("warnings", []))
+        confirmations = set(str(item) for item in gate.get("confirmations", []))
+        if setup.grade not in ("S+", "S", "A+"):
+            return False
+        if setup.final_score < 90:
+            return False
+        if watch_reasons != {"pivot_not_retested"}:
+            return False
+        if "missing_volume_quality" in warnings:
+            return False
+        required_confirmations = {"constructive_base_or_vcp", "volume_quality"}
+        if not required_confirmations.issubset(confirmations):
+            return False
+        if not any(item.startswith("stage_") and item.endswith("_permission") for item in confirmations):
+            return False
+        if not any(item in confirmations for item in ("stop_distance_good", "stop_distance_acceptable")):
+            return False
+        return True
 
