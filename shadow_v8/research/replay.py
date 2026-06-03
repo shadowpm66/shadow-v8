@@ -18,7 +18,7 @@ from shadow_v8.structure.vcp_engine import VcpEngine
 from shadow_v8.structure.wm_detector import WmDetector
 
 
-REPLAY_SCHEMA_VERSION = "1.5.18"
+REPLAY_SCHEMA_VERSION = "1.5.19"
 
 
 class Replay:
@@ -252,9 +252,12 @@ class Replay:
         watch_readiness_counter: Counter[str] = Counter()
         action_by_status: Counter[str] = Counter()
         allowed_non_entry_counter: Counter[str] = Counter()
+        countertrend_reclaim_counter: Counter[str] = Counter()
+        countertrend_reclaim_by_status: Counter[str] = Counter()
         blocked_samples: list[dict[str, Any]] = []
         allowed_non_entry_samples: list[dict[str, Any]] = []
         near_entry_watch_samples: list[dict[str, Any]] = []
+        countertrend_reclaim_samples: list[dict[str, Any]] = []
 
         records: list[tuple[str, dict[str, Any]]] = []
         records.extend(("skipped", skipped) for skipped in skipped_setups)
@@ -275,6 +278,28 @@ class Replay:
             watch_reason_counter.update(watch_reasons)
             warning_counter.update(warnings)
             confirmation_counter.update(confirmations)
+            countertrend_reclaim = gate.get("countertrend_reclaim") or {}
+            if countertrend_reclaim:
+                reason = str(countertrend_reclaim.get("reason") or "unknown")
+                countertrend_reclaim_counter[reason] += 1
+                if bool(countertrend_reclaim.get("candidate")):
+                    countertrend_reclaim_by_status[status] += 1
+                    if len(countertrend_reclaim_samples) < 10:
+                        countertrend_reclaim_samples.append(
+                            {
+                                "timestamp": record.get("timestamp") or record.get("opened_at"),
+                                "symbol": record.get("symbol"),
+                                "direction": record.get("direction"),
+                                "action": action,
+                                "grade": record.get("grade"),
+                                "score": record.get("score") or record.get("entry_score"),
+                                "status": status,
+                                "stage_pair": countertrend_reclaim.get("stage_pair"),
+                                "reason": reason,
+                                "watch_reasons": watch_reasons[:8],
+                                "confirmations": confirmations[:8],
+                            }
+                        )
             stage_gate = gate.get("stage") or {}
             if stage_gate:
                 weekly = str(stage_gate.get("weekly_stage") or "UNKNOWN")
@@ -367,10 +392,14 @@ class Replay:
                 status: dict(sorted(counter.items())) for status, counter in sorted(pivot_shift_bucket_by_status.items())
             },
             "watch_readiness_buckets": dict(sorted(watch_readiness_counter.items())),
+            "countertrend_reclaim_candidates": sum(countertrend_reclaim_by_status.values()),
+            "countertrend_reclaim_by_status": dict(sorted(countertrend_reclaim_by_status.items())),
+            "countertrend_reclaim_reasons": self._top_counts(countertrend_reclaim_counter),
             "top_allowed_non_entry_reasons": self._top_counts(allowed_non_entry_counter),
             "blocked_samples": blocked_samples,
             "allowed_non_entry_samples": allowed_non_entry_samples,
             "near_entry_watch_samples": near_entry_watch_samples,
+            "countertrend_reclaim_samples": countertrend_reclaim_samples,
             "validation_notes": self._gate_validation_notes(evaluated, allowed, watched, blocked, blocker_counter, watch_reason_counter),
         }
 

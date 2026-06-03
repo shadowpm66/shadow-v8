@@ -27,6 +27,7 @@ def compare_file(
     allow_short: bool,
     calibrate_intraday_stage: bool = False,
     calibrate_intraday_weekly_stage: bool = False,
+    calibrate_countertrend_reclaim: bool = False,
 ) -> dict[str, Any]:
     baseline_result = run_file(
         path,
@@ -47,6 +48,7 @@ def compare_file(
         allow_near_entry_watch=True,
         allow_intraday_stage_calibration=calibrate_intraday_stage,
         allow_intraday_weekly_stage_calibration=calibrate_intraday_weekly_stage,
+        allow_countertrend_reclaim_calibration=calibrate_countertrend_reclaim,
     )
     baseline = summary_row(baseline_result)
     calibrated = summary_row(calibrated_result)
@@ -66,6 +68,7 @@ def compare_file(
             "allow_near_entry_watch": True,
             "allow_intraday_stage_calibration": calibrate_intraday_stage,
             "allow_intraday_weekly_stage_calibration": calibrate_intraday_weekly_stage,
+            "allow_countertrend_reclaim_calibration": calibrate_countertrend_reclaim,
         },
         "baseline": baseline,
         "calibrated": calibrated,
@@ -78,6 +81,8 @@ def compare_file(
             "block_rate": _delta(calibrated.get("block_rate"), baseline.get("block_rate")),
             "near_entry_watch_samples": int(calibrated.get("near_entry_watch_samples") or 0)
             - int(baseline.get("near_entry_watch_samples") or 0),
+            "countertrend_reclaim_candidates": int(calibrated.get("countertrend_reclaim_candidates") or 0)
+            - int(baseline.get("countertrend_reclaim_candidates") or 0),
         },
         "verdict": verdict,
     }
@@ -221,7 +226,8 @@ def print_summary(rows: list[dict[str, Any]], guard: dict[str, Any] | None = Non
             "baseline_net_r={baseline_net_r} calibrated_net_r={calibrated_net_r} "
             "net_r_delta={net_r_delta} baseline_top_watch={baseline_top_watch} "
             "calibrated_top_watch={calibrated_top_watch} intraday_stage={intraday_stage} "
-            "intraday_weekly_stage={intraday_weekly_stage}".format(
+            "intraday_weekly_stage={intraday_weekly_stage} countertrend_reclaim={countertrend_reclaim} "
+            "countertrend_reclaim_delta={countertrend_reclaim_delta}".format(
                 symbol=row["symbol"],
                 verdict=row["verdict"],
                 baseline_trades=baseline.get("trades"),
@@ -236,6 +242,10 @@ def print_summary(rows: list[dict[str, Any]], guard: dict[str, Any] | None = Non
                 intraday_weekly_stage=(row.get("calibration") or {}).get(
                     "allow_intraday_weekly_stage_calibration"
                 ),
+                countertrend_reclaim=(row.get("calibration") or {}).get(
+                    "allow_countertrend_reclaim_calibration"
+                ),
+                countertrend_reclaim_delta=delta.get("countertrend_reclaim_candidates"),
             )
         )
 
@@ -258,6 +268,11 @@ def parse_args() -> argparse.Namespace:
         "--calibrate-intraday-weekly-stage",
         action="store_true",
         help="Also test crypto/forex intraday weekly-stage compatibility in the calibrated replay.",
+    )
+    parser.add_argument(
+        "--calibrate-countertrend-reclaim",
+        action="store_true",
+        help="Also test strict counter-trend reclaim calibration in the calibrated replay.",
     )
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--no-write", action="store_true", help="Print comparison without writing JSON")
@@ -296,6 +311,7 @@ def main() -> None:
             allow_short=args.allow_short,
             calibrate_intraday_stage=args.calibrate_intraday_stage,
             calibrate_intraday_weekly_stage=args.calibrate_intraday_weekly_stage,
+            calibrate_countertrend_reclaim=args.calibrate_countertrend_reclaim,
         )
         for path in files
     ]

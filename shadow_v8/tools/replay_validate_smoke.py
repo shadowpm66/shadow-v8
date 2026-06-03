@@ -19,7 +19,7 @@ def main() -> None:
     result = run_file(files[0], symbol="VALIDATE", asset_class="crypto", min_bars=10, allow_short=False)
     row = summary_row(result)
     assert_true(result["ok"] is True, "Replay validation result should be ok")
-    assert_true(result["schema_version"] == "1.5.18", "Replay validation should use schema 1.5.18")
+    assert_true(result["schema_version"] == "1.5.19", "Replay validation should use schema 1.5.19")
     assert_true("gate_analytics" in result, "Replay validation should include gate analytics")
     assert_true("allow_rate" in row, "Replay validation summary should include allow rate")
     assert_true("watch_rate" in row, "Replay validation summary should include watch rate")
@@ -31,6 +31,10 @@ def main() -> None:
     assert_true("top_pivot_shift_bucket" in row, "Replay validation summary should include top pivot shift bucket")
     assert_true("top_watch_readiness" in row, "Replay validation summary should include top watch readiness")
     assert_true("near_entry_watch_samples" in row, "Replay validation summary should include near-entry sample count")
+    assert_true(
+        "countertrend_reclaim_candidates" in row,
+        "Replay validation summary should include countertrend reclaim candidate count",
+    )
 
     print("Replay validate smoke complete")
     print("ok=True")
@@ -46,6 +50,7 @@ def main() -> None:
     print(f"top_pivot_shift_bucket={row['top_pivot_shift_bucket']}")
     print(f"top_watch_readiness={row['top_watch_readiness']}")
     print(f"near_entry_watch_samples={row['near_entry_watch_samples']}")
+    print(f"countertrend_reclaim_candidates={row['countertrend_reclaim_candidates']}")
 
 
 if __name__ == "__main__":

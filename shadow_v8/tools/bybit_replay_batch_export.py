@@ -61,6 +61,7 @@ def validate_exports(
     allow_short: bool,
     allow_intraday_stage_calibration: bool = False,
     allow_intraday_weekly_stage_calibration: bool = False,
+    allow_countertrend_reclaim_calibration: bool = False,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for item in exports:
@@ -74,6 +75,7 @@ def validate_exports(
             allow_short=allow_short,
             allow_intraday_stage_calibration=allow_intraday_stage_calibration,
             allow_intraday_weekly_stage_calibration=allow_intraday_weekly_stage_calibration,
+            allow_countertrend_reclaim_calibration=allow_countertrend_reclaim_calibration,
         )
         rows.append(summary_row(result))
     return rows
@@ -86,6 +88,7 @@ def compare_exports(
     allow_short: bool,
     calibrate_intraday_stage: bool = False,
     calibrate_intraday_weekly_stage: bool = False,
+    calibrate_countertrend_reclaim: bool = False,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for item in exports:
@@ -100,6 +103,7 @@ def compare_exports(
                 allow_short=allow_short,
                 calibrate_intraday_stage=calibrate_intraday_stage,
                 calibrate_intraday_weekly_stage=calibrate_intraday_weekly_stage,
+                calibrate_countertrend_reclaim=calibrate_countertrend_reclaim,
             )
         )
     return rows
@@ -201,6 +205,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Include crypto/forex intraday weekly-stage compatibility in calibrated replay comparison.",
     )
+    parser.add_argument(
+        "--compare-countertrend-reclaim",
+        action="store_true",
+        help="Include strict counter-trend reclaim calibration in calibrated replay comparison.",
+    )
     parser.add_argument("--strict-guard", action="store_true", help="Fail if calibration worsens, regresses R, or adds trades")
     parser.add_argument("--min-bars", type=int, default=120)
     parser.add_argument("--allow-short", action="store_true")
@@ -238,6 +247,7 @@ def main() -> None:
             allow_short=args.allow_short,
             calibrate_intraday_stage=args.compare_stage_calibration,
             calibrate_intraday_weekly_stage=args.compare_weekly_stage_calibration,
+            calibrate_countertrend_reclaim=args.compare_countertrend_reclaim,
         )
         if args.compare_calibration
         else []

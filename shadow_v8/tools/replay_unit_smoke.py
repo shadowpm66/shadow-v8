@@ -51,7 +51,7 @@ def check_replay_fixture() -> dict:
     fixture_asset, fixture_candles, min_bars = load_fixture()
     result = Replay(asset=fixture_asset, candles=fixture_candles, min_bars=min_bars).run()
     assert_true(result["ok"] is True, "Replay fixture result should be ok=True")
-    assert_true(result["schema_version"] == "1.5.18", "Replay result should include schema_version")
+    assert_true(result["schema_version"] == "1.5.19", "Replay result should include schema_version")
     assert_true("metrics" in result, "Replay result should include metrics")
     assert_true("breakdowns" in result, "Replay result should include breakdowns")
     assert_true("gate_analytics" in result, "Replay result should include gate analytics")
@@ -121,6 +121,14 @@ def check_replay_fixture() -> dict:
     )
     assert_true("watch_readiness_buckets" in analytics, "Gate analytics should include watch readiness buckets")
     assert_true("near_entry_watch_samples" in analytics, "Gate analytics should include near-entry watch samples")
+    assert_true(
+        "countertrend_reclaim_candidates" in analytics,
+        "Gate analytics should include countertrend reclaim candidates",
+    )
+    assert_true(
+        "countertrend_reclaim_samples" in analytics,
+        "Gate analytics should include countertrend reclaim samples",
+    )
     assert_true("top_allowed_non_entry_reasons" in analytics, "Gate analytics should include allowed non-entry reasons")
     assert_true("allowed_non_entry_samples" in analytics, "Gate analytics should include allowed non-entry samples")
     return result

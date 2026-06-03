@@ -19,6 +19,9 @@ from shadow_v8.utils import clamp
 
 
 class Scorer:
+    def __init__(self, allow_countertrend_reclaim_watch: bool = False) -> None:
+        self.allow_countertrend_reclaim_watch = allow_countertrend_reclaim_watch
+
     def score(
         self,
         symbol: str,
@@ -499,6 +502,22 @@ class Scorer:
             blockers.append("earnings_block")
 
         stage_diagnostics = self._stage_gate_diagnostics(stage, structure.direction)
+        countertrend_reclaim = self._countertrend_reclaim_calibration(
+            stage=stage,
+            structure=structure,
+            pivot=pivot,
+            context=context,
+            blockers=blockers,
+            watch_reasons=watch_reasons,
+            warnings=warnings,
+            confirmations=confirmations,
+            stop_distance_quality=stop_distance_quality,
+        )
+        if countertrend_reclaim["candidate"]:
+            stage_blocker = countertrend_reclaim["stage_blocker"]
+            blockers = [item for item in blockers if item != stage_blocker]
+            watch_reasons.append("countertrend_reclaim_calibration")
+            confirmations.append("countertrend_reclaim_candidate")
         status = "ALLOW"
         if blockers:
             status = "BLOCK"
@@ -513,6 +532,7 @@ class Scorer:
             "confirmations": confirmations,
             "confirmed_count": len(confirmations),
             "stage": stage_diagnostics,
+            "countertrend_reclaim": countertrend_reclaim,
             "required": [
                 "directional_structure",
                 "stage_permission",
@@ -521,6 +541,77 @@ class Scorer:
                 "valid_stop_distance",
             ],
         }
+
+    def _countertrend_reclaim_calibration(
+        self,
+        *,
+        stage: StageState,
+        structure: StructureSignal,
+        pivot: PivotConfirmation,
+        context: ContextState | None,
+        blockers: list[str],
+        watch_reasons: list[str],
+        warnings: list[str],
+        confirmations: list[str],
+        stop_distance_quality: str,
+    ) -> dict[str, Any]:
+        direction = structure.direction
+        stage_blocker = "stage_blocks_long" if direction == "LONG" else "stage_blocks_short"
+        stage_pair = f"{stage.weekly_stage.value}/{stage.daily_stage.value}"
+        detail = {
+            "enabled": self.allow_countertrend_reclaim_watch,
+            "candidate": False,
+            "stage_blocker": stage_blocker,
+            "direction": direction,
+            "stage_pair": stage_pair,
+            "reason": "disabled",
+        }
+        if not self.allow_countertrend_reclaim_watch:
+            return detail
+        if direction not in ("LONG", "SHORT") or stage_blocker not in blockers:
+            detail["reason"] = "no_stage_block"
+            return detail
+        if any(item in blockers for item in ("adverse_pivot_shift", "against_reference_confluence", "wide_stop_distance")):
+            detail["reason"] = "hard_blocker_present"
+            return detail
+        if "missing_volume_quality" in warnings:
+            detail["reason"] = "missing_volume_quality"
+            return detail
+        required_confirmations = {"constructive_base_or_vcp", "volume_quality"}
+        if not required_confirmations.issubset(set(confirmations)):
+            detail["reason"] = "missing_core_confirmation"
+            return detail
+        if not any(item in confirmations for item in ("context_supportive", "reference_confluence")):
+            detail["reason"] = "missing_context_or_reference"
+            return detail
+        if not any(item in confirmations for item in ("stop_distance_good", "stop_distance_acceptable")):
+            detail["reason"] = "stop_distance_not_valid"
+            return detail
+        if not pivot.reclaimed_or_lost:
+            detail["reason"] = "pivot_not_reclaimed_or_lost"
+            return detail
+        if not (pivot.retest_hold or pivot.confirmed):
+            detail["reason"] = "pivot_retest_not_held"
+            return detail
+        pivot_metadata = pivot.metadata or {}
+        shift_state = str(pivot_metadata.get("shift_progress_state") or "")
+        shift_bucket = str(pivot_metadata.get("shift_progress_bucket") or "")
+        if shift_state in {"adverse", "not_ready"} or shift_bucket == "not_ready":
+            detail["reason"] = "pivot_shift_not_ready"
+            return detail
+        if direction == "LONG":
+            countertrend_stage = stage.daily_stage in (Stage.STAGE_3, Stage.STAGE_4) or stage.weekly_stage == Stage.STAGE_4
+        else:
+            countertrend_stage = stage.daily_stage in (Stage.STAGE_1, Stage.STAGE_2) or stage.weekly_stage == Stage.STAGE_2
+        if not countertrend_stage:
+            detail["reason"] = "not_countertrend_stage"
+            return detail
+        detail["candidate"] = True
+        detail["reason"] = "strict_reclaim_candidate"
+        detail["watch_reasons"] = list(watch_reasons[:8])
+        detail["confirmations"] = list(confirmations[:8])
+        detail["stop_distance_quality"] = stop_distance_quality
+        return detail
 
     def _stage_gate_diagnostics(self, stage: StageState, direction: str) -> dict[str, Any]:
         reasons: list[str] = []
