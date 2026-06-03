@@ -18,7 +18,7 @@ from shadow_v8.structure.vcp_engine import VcpEngine
 from shadow_v8.structure.wm_detector import WmDetector
 
 
-REPLAY_SCHEMA_VERSION = "1.5.12"
+REPLAY_SCHEMA_VERSION = "1.5.13"
 
 
 class Replay:
@@ -251,6 +251,7 @@ class Replay:
         allowed_non_entry_counter: Counter[str] = Counter()
         blocked_samples: list[dict[str, Any]] = []
         allowed_non_entry_samples: list[dict[str, Any]] = []
+        near_entry_watch_samples: list[dict[str, Any]] = []
 
         records: list[tuple[str, dict[str, Any]]] = []
         records.extend(("skipped", skipped) for skipped in skipped_setups)
@@ -275,7 +276,22 @@ class Replay:
                 pivot_shift_bucket_counter[bucket] += 1
                 pivot_shift_bucket_by_status.setdefault(status, Counter())[bucket] += 1
             if status == "WATCH":
-                watch_readiness_counter[self._watch_readiness_bucket(confirmations, watch_reasons, warnings)] += 1
+                watch_readiness = self._watch_readiness_bucket(confirmations, watch_reasons, warnings)
+                watch_readiness_counter[watch_readiness] += 1
+                if watch_readiness == "near_entry" and len(near_entry_watch_samples) < 10:
+                    near_entry_watch_samples.append(
+                        {
+                            "timestamp": record.get("timestamp"),
+                            "symbol": record.get("symbol"),
+                            "direction": record.get("direction"),
+                            "action": action,
+                            "grade": record.get("grade"),
+                            "score": record.get("score"),
+                            "confirmations": confirmations[:8],
+                            "watch_reasons": watch_reasons[:8],
+                            "warnings": warnings[:5],
+                        }
+                    )
 
             if record_type == "skipped" and status == "ALLOW":
                 reason = str(record.get("reason") or "unknown_non_entry_reason")
@@ -336,6 +352,7 @@ class Replay:
             "top_allowed_non_entry_reasons": self._top_counts(allowed_non_entry_counter),
             "blocked_samples": blocked_samples,
             "allowed_non_entry_samples": allowed_non_entry_samples,
+            "near_entry_watch_samples": near_entry_watch_samples,
             "validation_notes": self._gate_validation_notes(evaluated, allowed, watched, blocked, blocker_counter, watch_reason_counter),
         }
 
