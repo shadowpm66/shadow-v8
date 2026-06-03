@@ -53,7 +53,13 @@ def vcp() -> VcpState:
         volume_dry=True,
         higher_lows=True,
         stop_distance_quality="GOOD",
-        metadata={"near_pivot": True, "breakout_volume": True, "atr_compressing": True},
+        metadata={
+            "near_pivot": True,
+            "breakout_volume": True,
+            "atr_compressing": True,
+            "directional_close_shift": True,
+            "directional_evidence": "close_shift",
+        },
     )
 
 
@@ -221,10 +227,57 @@ def check_near_entry_watch_calibration() -> None:
     risk = RiskManager().evaluate(asset(), setup)
     default_entry = EntryPolicy().decide(asset(), setup, risk)
     calibrated_entry = EntryPolicy(allow_near_entry_watch=True).decide(asset(), setup, risk)
+    no_shift_vcp = vcp()
+    no_shift_vcp.metadata = dict(no_shift_vcp.metadata)
+    no_shift_vcp.metadata["directional_close_shift"] = False
+    no_shift_setup = Scorer().score(
+        "NEAR_ENTRY_NO_SHIFT",
+        stage(),
+        base(),
+        no_shift_vcp,
+        structure(),
+        nested(),
+        near_entry_pivot,
+        context=context(),
+    )
+    no_shift_risk = RiskManager().evaluate(asset(), no_shift_setup)
+    no_shift_entry = EntryPolicy(allow_near_entry_watch=True).decide(asset(), no_shift_setup, no_shift_risk)
+    adverse_progress_pivot = PivotConfirmation(
+        pivot=100.0,
+        reclaimed_or_lost=True,
+        retested=False,
+        retest_hold=False,
+        confirmed=False,
+        metadata={
+            "state": "awaiting_retest",
+            "shift_progress_state": "not_ready",
+            "shift_progress_bucket": "not_ready",
+            "shift_progress": -0.5,
+        },
+    )
+    adverse_progress_setup = Scorer().score(
+        "NEAR_ENTRY_ADVERSE_PROGRESS",
+        stage(),
+        base(),
+        vcp(),
+        structure(),
+        nested(),
+        adverse_progress_pivot,
+        context=context(),
+    )
+    adverse_progress_risk = RiskManager().evaluate(asset(), adverse_progress_setup)
+    adverse_progress_entry = EntryPolicy(allow_near_entry_watch=True).decide(
+        asset(), adverse_progress_setup, adverse_progress_risk
+    )
     assert_true(gate["status"] == "WATCH", "Near-entry setup should remain a watch gate")
     assert_true(gate["watch_reasons"] == ["pivot_not_retested"], "Near-entry setup should only wait for retest")
     assert_true(default_entry.action == "MONITOR", "Default policy should still monitor near-entry watch setups")
     assert_true(calibrated_entry.action == "ENTER", "Calibration mode should enter strict near-entry watch setups")
+    assert_true(no_shift_entry.action == "MONITOR", "Calibration should require directional close-shift evidence")
+    assert_true(
+        adverse_progress_entry.action == "MONITOR",
+        "Calibration should reject not-ready or adverse pivot shift progress",
+    )
     assert_true(
         calibrated_entry.metadata.get("near_entry_watch_override") is True,
         "Calibration entry should mark the near-entry override",
