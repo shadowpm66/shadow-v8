@@ -163,6 +163,22 @@ def evaluate_guard(
     }
 
 
+def guard_options_from_args(args: argparse.Namespace) -> dict[str, Any]:
+    fail_on_worse = bool(args.fail_on_worse or args.strict_guard)
+    max_net_r_regression = args.max_net_r_regression
+    max_added_trades = args.max_added_trades
+    if args.strict_guard:
+        if max_net_r_regression is None:
+            max_net_r_regression = 0.0
+        if max_added_trades is None:
+            max_added_trades = 0
+    return {
+        "fail_on_worse": fail_on_worse,
+        "max_net_r_regression": max_net_r_regression,
+        "max_added_trades": max_added_trades,
+    }
+
+
 def print_summary(rows: list[dict[str, Any]], guard: dict[str, Any] | None = None) -> None:
     aggregate = summarize_rows(rows)
     print("Replay calibration compare complete")
@@ -219,6 +235,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--allow-short", action="store_true")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--no-write", action="store_true", help="Print comparison without writing JSON")
+    parser.add_argument(
+        "--strict-guard",
+        action="store_true",
+        help="Preset: fail on worse verdict, any net R regression, or any added trade",
+    )
     parser.add_argument("--fail-on-worse", action="store_true", help="Exit non-zero if any calibration verdict is worse")
     parser.add_argument(
         "--max-net-r-regression",
@@ -250,12 +271,8 @@ def main() -> None:
         )
         for path in files
     ]
-    guard = evaluate_guard(
-        rows,
-        fail_on_worse=args.fail_on_worse,
-        max_net_r_regression=args.max_net_r_regression,
-        max_added_trades=args.max_added_trades,
-    )
+    guard_options = guard_options_from_args(args)
+    guard = evaluate_guard(rows, **guard_options)
     summary = {
         "ok": guard["ok"],
         "file_count": len(files),

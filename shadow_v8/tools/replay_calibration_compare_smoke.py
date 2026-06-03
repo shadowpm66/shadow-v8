@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
-from shadow_v8.tools.replay_calibration_compare import compare_file, evaluate_guard, summarize_rows
+from shadow_v8.tools.replay_calibration_compare import compare_file, evaluate_guard, guard_options_from_args, summarize_rows
 from shadow_v8.tools.replay_validate import discover_csv_files
 
 
@@ -29,6 +30,17 @@ def main() -> None:
     assert_true(aggregate["verdict_counts"][row["verdict"]] == 1, "Aggregate should count verdicts")
     passing_guard = evaluate_guard([row], fail_on_worse=True, max_net_r_regression=0.0, max_added_trades=0)
     assert_true(passing_guard["ok"] is True, "Unchanged calibration should pass strict guard")
+    strict_options = guard_options_from_args(
+        SimpleNamespace(
+            strict_guard=True,
+            fail_on_worse=False,
+            max_net_r_regression=None,
+            max_added_trades=None,
+        )
+    )
+    assert_true(strict_options["fail_on_worse"] is True, "Strict guard should fail on worse verdicts")
+    assert_true(strict_options["max_net_r_regression"] == 0.0, "Strict guard should reject any net R regression")
+    assert_true(strict_options["max_added_trades"] == 0, "Strict guard should reject added trades")
     worse_row = dict(row)
     worse_row["verdict"] = "worse"
     worse_row["delta"] = dict(row["delta"], net_r=-0.25, trades=2)
@@ -42,6 +54,7 @@ def main() -> None:
     print(f"verdict={row['verdict']}")
     print(f"overall_verdict={aggregate['overall_verdict']}")
     print(f"guard_ok={passing_guard['ok']}")
+    print("strict_guard=preset")
     print(f"guard_failure_count={failing_guard['failure_count']}")
     print(f"baseline_trades={row['baseline']['trades']}")
     print(f"calibrated_trades={row['calibrated']['trades']}")
