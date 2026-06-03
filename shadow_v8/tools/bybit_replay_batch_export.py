@@ -92,6 +92,42 @@ def parse_symbols(raw: str) -> list[str]:
     return [item for item in symbols if item]
 
 
+def count_values(rows: list[dict[str, Any]], key: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        value = row.get(key)
+        if value is None:
+            continue
+        name = str(value)
+        counts[name] = counts.get(name, 0) + 1
+    return dict(sorted(counts.items(), key=lambda item: (-item[1], item[0])))
+
+
+def build_tuning_hints(
+    validation_rows: list[dict[str, Any]],
+    calibration_rows: list[dict[str, Any]],
+    guard: dict[str, Any] | None,
+) -> list[str]:
+    hints: list[str] = []
+    if guard is not None and not guard.get("ok"):
+        hints.append("review_calibration_guard_failures")
+    if any(row.get("verdict") == "worse" for row in calibration_rows):
+        hints.append("inspect_calibration_regressions")
+    if any(int(row.get("trades") or 0) == 0 for row in validation_rows):
+        hints.append("investigate_zero_trade_symbols")
+
+    top_blockers = count_values(validation_rows, "top_blocker")
+    top_watch = count_values(validation_rows, "top_watch_reason")
+    top_shift = count_values(validation_rows, "top_pivot_shift_bucket")
+    if top_blockers:
+        hints.append(f"tune_blocker:{next(iter(top_blockers))}")
+    if top_watch:
+        hints.append(f"tune_watch:{next(iter(top_watch))}")
+    if top_shift:
+        hints.append(f"tune_pivot_shift:{next(iter(top_shift))}")
+    return hints[:5]
+
+
 def summarize_batch(
     exports: list[dict[str, Any]],
     validation_rows: list[dict[str, Any]],
@@ -110,9 +146,14 @@ def summarize_batch(
         "best_net_r": validation_ranked[0] if validation_ranked else None,
         "worst_net_r": validation_ranked[-1] if validation_ranked else None,
         "zero_trade_symbols": zero_trade_symbols,
+        "top_blockers": count_values(validation_rows, "top_blocker"),
+        "top_watch_reasons": count_values(validation_rows, "top_watch_reason"),
+        "top_pivot_shift_buckets": count_values(validation_rows, "top_pivot_shift_bucket"),
+        "top_watch_readiness": count_values(validation_rows, "top_watch_readiness"),
         "calibration_worse_symbols": calibration_worse,
         "guard_ok": None if guard is None else guard.get("ok"),
         "guard_failure_count": None if guard is None else guard.get("failure_count"),
+        "suggested_next_focus": build_tuning_hints(validation_rows, calibration_rows, guard),
     }
 
 
@@ -197,7 +238,8 @@ def main() -> None:
     print(f"exports={sum(1 for item in exports if item.get('ok'))}/{len(exports)}")
     print(
         "digest: exported={exported_count} validated={validated_count} best={best} worst={worst} "
-        "zero_trade_symbols={zero_trade_symbols} calibration_worse={calibration_worse_symbols} guard_ok={guard_ok}".format(
+        "zero_trade_symbols={zero_trade_symbols} calibration_worse={calibration_worse_symbols} "
+        "guard_ok={guard_ok} next_focus={suggested_next_focus}".format(
             exported_count=digest["exported_count"],
             validated_count=digest["validated_count"],
             best=(digest["best_net_r"] or {}).get("symbol"),
@@ -205,6 +247,7 @@ def main() -> None:
             zero_trade_symbols=digest["zero_trade_symbols"],
             calibration_worse_symbols=digest["calibration_worse_symbols"],
             guard_ok=digest["guard_ok"],
+            suggested_next_focus=digest["suggested_next_focus"],
         )
     )
     for item in exports:

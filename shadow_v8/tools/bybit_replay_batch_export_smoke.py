@@ -62,6 +62,9 @@ def main() -> None:
             assert_true(digest["validated_count"] == 3, "Batch digest should count validations")
             assert_true(digest["best_net_r"] is not None, "Batch digest should expose best net R row")
             assert_true(digest["worst_net_r"] is not None, "Batch digest should expose worst net R row")
+            assert_true(isinstance(digest["top_blockers"], dict), "Batch digest should include blocker counts")
+            assert_true(isinstance(digest["top_watch_reasons"], dict), "Batch digest should include watch reason counts")
+            assert_true(isinstance(digest["suggested_next_focus"], list), "Batch digest should include tuning hints")
     finally:
         batch.fetch_klines = original_fetch
 
@@ -70,6 +73,7 @@ def main() -> None:
     print("symbols=3")
     print("validation_rows=3")
     print("digest=enabled")
+    print("tuning_hints=enabled")
 
 
 if __name__ == "__main__":
