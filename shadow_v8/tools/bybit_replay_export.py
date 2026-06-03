@@ -114,6 +114,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--validate", action="store_true", help="Run replay validation after writing the CSV")
     parser.add_argument("--min-bars", type=int, default=120)
     parser.add_argument("--allow-short", action="store_true")
+    parser.add_argument(
+        "--allow-near-entry-watch",
+        action="store_true",
+        help="Calibration mode: allow strict near-entry WATCH setups to enter during replay validation only.",
+    )
     return parser.parse_args()
 
 
@@ -146,6 +151,7 @@ def main() -> None:
             asset_class="crypto",
             min_bars=args.min_bars,
             allow_short=args.allow_short,
+            allow_near_entry_watch=args.allow_near_entry_watch,
         )
         row = summary_row(result)
         print(

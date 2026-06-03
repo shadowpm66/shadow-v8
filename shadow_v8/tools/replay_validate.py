@@ -9,6 +9,7 @@ from typing import Any
 from shadow_v8.config import ROOT_DIR
 from shadow_v8.models import AssetConfig
 from shadow_v8.research.replay import Replay
+from shadow_v8.strategy.entry_policy import EntryPolicy
 from shadow_v8.tools.replay_csv import load_csv_candles
 
 
@@ -47,16 +48,26 @@ def symbol_from_path(path: Path) -> str:
     return stem
 
 
-def run_file(path: Path, *, symbol: str | None, asset_class: str, min_bars: int, allow_short: bool) -> dict[str, Any]:
+def run_file(
+    path: Path,
+    *,
+    symbol: str | None,
+    asset_class: str,
+    min_bars: int,
+    allow_short: bool,
+    allow_near_entry_watch: bool = False,
+) -> dict[str, Any]:
     candles = load_csv_candles(path)
     replay_symbol = symbol or symbol_from_path(path)
     result = Replay(
         asset=build_asset(replay_symbol, asset_class, allow_short),
         candles=candles,
         min_bars=min_bars,
+        entry_policy=EntryPolicy(allow_near_entry_watch=allow_near_entry_watch),
         input_source={
             "type": "csv",
             "path": str(path),
+            "allow_near_entry_watch": allow_near_entry_watch,
         },
     ).run()
     return result
@@ -133,6 +144,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--asset-class", default="crypto", choices=["crypto", "forex", "stock", "commodity", "tokenized_stock"])
     parser.add_argument("--min-bars", type=int, default=60)
     parser.add_argument("--allow-short", action="store_true")
+    parser.add_argument(
+        "--allow-near-entry-watch",
+        action="store_true",
+        help="Calibration mode: allow strict near-entry WATCH setups to enter during replay only.",
+    )
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--no-write", action="store_true", help="Print results without writing JSON reports")
     return parser.parse_args()
@@ -147,7 +163,14 @@ def main() -> None:
         raise SystemExit("--symbol can only be used with one CSV file")
 
     results = [
-        run_file(path, symbol=args.symbol, asset_class=args.asset_class, min_bars=args.min_bars, allow_short=args.allow_short)
+        run_file(
+            path,
+            symbol=args.symbol,
+            asset_class=args.asset_class,
+            min_bars=args.min_bars,
+            allow_short=args.allow_short,
+            allow_near_entry_watch=args.allow_near_entry_watch,
+        )
         for path in files
     ]
     rows = [summary_row(result) for result in results]

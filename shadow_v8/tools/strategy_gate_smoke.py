@@ -199,6 +199,38 @@ def check_watch_gate() -> None:
     assert_true("Gate watching" in entry.reason, "Monitor reason should explain watch reasons")
 
 
+def check_near_entry_watch_calibration() -> None:
+    near_entry_pivot = PivotConfirmation(
+        pivot=100.0,
+        reclaimed_or_lost=True,
+        retested=False,
+        retest_hold=False,
+        confirmed=False,
+    )
+    setup = Scorer().score(
+        "NEAR_ENTRY",
+        stage(),
+        base(),
+        vcp(),
+        structure(),
+        nested(),
+        near_entry_pivot,
+        context=context(),
+    )
+    gate = setup.metadata["trade_gate"]
+    risk = RiskManager().evaluate(asset(), setup)
+    default_entry = EntryPolicy().decide(asset(), setup, risk)
+    calibrated_entry = EntryPolicy(allow_near_entry_watch=True).decide(asset(), setup, risk)
+    assert_true(gate["status"] == "WATCH", "Near-entry setup should remain a watch gate")
+    assert_true(gate["watch_reasons"] == ["pivot_not_retested"], "Near-entry setup should only wait for retest")
+    assert_true(default_entry.action == "MONITOR", "Default policy should still monitor near-entry watch setups")
+    assert_true(calibrated_entry.action == "ENTER", "Calibration mode should enter strict near-entry watch setups")
+    assert_true(
+        calibrated_entry.metadata.get("near_entry_watch_override") is True,
+        "Calibration entry should mark the near-entry override",
+    )
+
+
 def check_pivot_watch_reason_details() -> None:
     scenarios = [
         (
@@ -593,6 +625,7 @@ def check_stacked_obstacle_reference_block() -> None:
 def main() -> None:
     check_approved_gate()
     check_watch_gate()
+    check_near_entry_watch_calibration()
     check_pivot_watch_reason_details()
     check_base_vcp_watch_reason_details()
     check_close_compression_base_needs_vcp_confirmation()
@@ -607,6 +640,7 @@ def main() -> None:
     print("ok=True")
     print("approved_gate=ALLOW")
     print("watch_gate=MONITOR")
+    print("near_entry_watch_calibration=explicit")
     print("blocked_gate=SKIP")
     print("mixed_reference_gate=MONITOR")
     print("stacked_reference_gate=SKIP")
