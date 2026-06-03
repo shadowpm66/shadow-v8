@@ -18,7 +18,7 @@ from shadow_v8.structure.vcp_engine import VcpEngine
 from shadow_v8.structure.wm_detector import WmDetector
 
 
-REPLAY_SCHEMA_VERSION = "1.5.11"
+REPLAY_SCHEMA_VERSION = "1.5.12"
 
 
 class Replay:
@@ -246,6 +246,7 @@ class Replay:
         confirmation_counter: Counter[str] = Counter()
         pivot_shift_bucket_counter: Counter[str] = Counter()
         pivot_shift_bucket_by_status: dict[str, Counter[str]] = {}
+        watch_readiness_counter: Counter[str] = Counter()
         action_by_status: Counter[str] = Counter()
         allowed_non_entry_counter: Counter[str] = Counter()
         blocked_samples: list[dict[str, Any]] = []
@@ -273,6 +274,8 @@ class Replay:
             for bucket in self._pivot_shift_buckets_from_reasons(watch_reasons):
                 pivot_shift_bucket_counter[bucket] += 1
                 pivot_shift_bucket_by_status.setdefault(status, Counter())[bucket] += 1
+            if status == "WATCH":
+                watch_readiness_counter[self._watch_readiness_bucket(confirmations, watch_reasons, warnings)] += 1
 
             if record_type == "skipped" and status == "ALLOW":
                 reason = str(record.get("reason") or "unknown_non_entry_reason")
@@ -329,6 +332,7 @@ class Replay:
             "pivot_shift_progress_buckets_by_status": {
                 status: dict(sorted(counter.items())) for status, counter in sorted(pivot_shift_bucket_by_status.items())
             },
+            "watch_readiness_buckets": dict(sorted(watch_readiness_counter.items())),
             "top_allowed_non_entry_reasons": self._top_counts(allowed_non_entry_counter),
             "blocked_samples": blocked_samples,
             "allowed_non_entry_samples": allowed_non_entry_samples,
@@ -352,6 +356,16 @@ class Replay:
         ):
             buckets.append("insufficient_unbucketed")
         return buckets
+
+    def _watch_readiness_bucket(self, confirmations: list[str], watch_reasons: list[str], warnings: list[str]) -> str:
+        confirmed_count = len(confirmations)
+        watch_count = len(watch_reasons)
+        warning_count = len(warnings)
+        if confirmed_count >= 5 and watch_count <= 2:
+            return "near_entry"
+        if confirmed_count >= 3 and watch_count <= 5 and warning_count <= 2:
+            return "developing"
+        return "early"
 
     def _gate_from_record(self, record: dict[str, Any]) -> dict[str, Any]:
         confirmation = record.get("confirmation") or {}
