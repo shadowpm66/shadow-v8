@@ -100,6 +100,7 @@ def summary_row(result: dict[str, Any]) -> dict[str, Any]:
         "top_watch_reason": top_watch,
         "top_pivot_shift_bucket": top_pivot_shift_bucket,
         "top_watch_readiness": top_watch_readiness,
+        "near_entry_watch_samples": len(gate.get("near_entry_watch_samples", [])),
         "top_allowed_non_entry_reason": top_allowed_non_entry,
         "validation_notes": gate.get("validation_notes", []),
     }
@@ -121,7 +122,7 @@ def print_summary(rows: list[dict[str, Any]]) -> None:
             "allowed_entries={allowed_entries} allowed_non_entries={allowed_non_entries} "
             "top_allowed_non_entry_reason={top_allowed_non_entry_reason} top_blocker={top_blocker} "
             "top_watch_reason={top_watch_reason} top_pivot_shift_bucket={top_pivot_shift_bucket} "
-            "top_watch_readiness={top_watch_readiness}".format(**row)
+            "top_watch_readiness={top_watch_readiness} near_entry_watch_samples={near_entry_watch_samples}".format(**row)
         )
 
 
