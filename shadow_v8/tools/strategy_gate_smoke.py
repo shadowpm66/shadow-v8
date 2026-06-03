@@ -150,6 +150,8 @@ def check_approved_gate() -> None:
     entry = EntryPolicy().decide(asset(), setup, risk)
     assert_true(gate["status"] == "ALLOW", "High-quality setup should pass gate")
     assert_true("pivot_confirmed" in gate["confirmations"], "Gate should confirm pivot")
+    assert_true(gate["stage"]["permission"] is True, "Gate should include confirmed stage permission")
+    assert_true(gate["stage"]["reasons"] == ["stage_permission_confirmed"], "Gate should explain stage permission")
     assert_true(entry.action == "ENTER", "A+ quality gated setup should enter")
 
 
