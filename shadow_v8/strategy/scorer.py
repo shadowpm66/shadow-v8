@@ -525,17 +525,19 @@ class Scorer:
     def _stage_gate_diagnostics(self, stage: StageState, direction: str) -> dict[str, Any]:
         reasons: list[str] = []
         if direction == "LONG":
-            if stage.weekly_stage != Stage.STAGE_2:
-                reasons.append("weekly_not_stage2")
-            if stage.daily_stage not in (Stage.STAGE_2, Stage.STAGE_1, Stage.UNKNOWN):
-                reasons.append("daily_not_long_compatible")
             permission = stage.long_permission
+            if not permission:
+                if stage.weekly_stage != Stage.STAGE_2:
+                    reasons.append("weekly_not_stage2")
+                if stage.daily_stage not in (Stage.STAGE_2, Stage.STAGE_1, Stage.UNKNOWN):
+                    reasons.append("daily_not_long_compatible")
         elif direction == "SHORT":
-            if stage.weekly_stage != Stage.STAGE_4:
-                reasons.append("weekly_not_stage4")
-            if stage.daily_stage not in (Stage.STAGE_4, Stage.STAGE_3, Stage.UNKNOWN):
-                reasons.append("daily_not_short_compatible")
             permission = stage.short_permission
+            if not permission:
+                if stage.weekly_stage != Stage.STAGE_4:
+                    reasons.append("weekly_not_stage4")
+                if stage.daily_stage not in (Stage.STAGE_4, Stage.STAGE_3, Stage.UNKNOWN):
+                    reasons.append("daily_not_short_compatible")
         else:
             reasons.append("no_direction_for_stage_permission")
             permission = False

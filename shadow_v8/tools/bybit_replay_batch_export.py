@@ -54,7 +54,13 @@ def export_symbol(
     }
 
 
-def validate_exports(exports: list[dict[str, Any]], *, min_bars: int, allow_short: bool) -> list[dict[str, Any]]:
+def validate_exports(
+    exports: list[dict[str, Any]],
+    *,
+    min_bars: int,
+    allow_short: bool,
+    allow_intraday_stage_calibration: bool = False,
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for item in exports:
         if not item.get("ok"):
@@ -65,12 +71,19 @@ def validate_exports(exports: list[dict[str, Any]], *, min_bars: int, allow_shor
             asset_class="crypto",
             min_bars=min_bars,
             allow_short=allow_short,
+            allow_intraday_stage_calibration=allow_intraday_stage_calibration,
         )
         rows.append(summary_row(result))
     return rows
 
 
-def compare_exports(exports: list[dict[str, Any]], *, min_bars: int, allow_short: bool) -> list[dict[str, Any]]:
+def compare_exports(
+    exports: list[dict[str, Any]],
+    *,
+    min_bars: int,
+    allow_short: bool,
+    calibrate_intraday_stage: bool = False,
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for item in exports:
         if not item.get("ok"):
@@ -82,6 +95,7 @@ def compare_exports(exports: list[dict[str, Any]], *, min_bars: int, allow_short
                 asset_class="crypto",
                 min_bars=min_bars,
                 allow_short=allow_short,
+                calibrate_intraday_stage=calibrate_intraday_stage,
             )
         )
     return rows
@@ -173,6 +187,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sleep-sec", type=float, default=0.25, help="Pause between symbols to be gentle on public API")
     parser.add_argument("--validate", action="store_true", help="Run replay validation for each exported CSV")
     parser.add_argument("--compare-calibration", action="store_true", help="Run default vs calibration comparison for exports")
+    parser.add_argument(
+        "--compare-stage-calibration",
+        action="store_true",
+        help="Include crypto/forex intraday stage compatibility in calibrated replay comparison.",
+    )
     parser.add_argument("--strict-guard", action="store_true", help="Fail if calibration worsens, regresses R, or adds trades")
     parser.add_argument("--min-bars", type=int, default=120)
     parser.add_argument("--allow-short", action="store_true")
@@ -204,7 +223,14 @@ def main() -> None:
 
     validation_rows = validate_exports(exports, min_bars=args.min_bars, allow_short=args.allow_short) if args.validate else []
     calibration_rows = (
-        compare_exports(exports, min_bars=args.min_bars, allow_short=args.allow_short) if args.compare_calibration else []
+        compare_exports(
+            exports,
+            min_bars=args.min_bars,
+            allow_short=args.allow_short,
+            calibrate_intraday_stage=args.compare_stage_calibration,
+        )
+        if args.compare_calibration
+        else []
     )
     guard = None
     if args.compare_calibration:
