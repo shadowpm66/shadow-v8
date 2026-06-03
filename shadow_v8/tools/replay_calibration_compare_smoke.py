@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from shadow_v8.tools.replay_calibration_compare import compare_file, summarize_rows
+from shadow_v8.tools.replay_calibration_compare import compare_file, evaluate_guard, summarize_rows
 from shadow_v8.tools.replay_validate import discover_csv_files
 
 
@@ -27,12 +27,22 @@ def main() -> None:
     assert_true(aggregate["file_count"] == 1, "Aggregate should count compared files")
     assert_true(aggregate["overall_verdict"] == row["verdict"], "Aggregate should preserve single-file verdict")
     assert_true(aggregate["verdict_counts"][row["verdict"]] == 1, "Aggregate should count verdicts")
+    passing_guard = evaluate_guard([row], fail_on_worse=True, max_net_r_regression=0.0, max_added_trades=0)
+    assert_true(passing_guard["ok"] is True, "Unchanged calibration should pass strict guard")
+    worse_row = dict(row)
+    worse_row["verdict"] = "worse"
+    worse_row["delta"] = dict(row["delta"], net_r=-0.25, trades=2)
+    failing_guard = evaluate_guard([worse_row], fail_on_worse=True, max_net_r_regression=0.1, max_added_trades=1)
+    assert_true(failing_guard["ok"] is False, "Worse calibration should fail guard")
+    assert_true(failing_guard["failure_count"] == 3, "Guard should report each failed threshold")
 
     print("Replay calibration compare smoke complete")
     print("ok=True")
     print(f"symbol={row['symbol']}")
     print(f"verdict={row['verdict']}")
     print(f"overall_verdict={aggregate['overall_verdict']}")
+    print(f"guard_ok={passing_guard['ok']}")
+    print(f"guard_failure_count={failing_guard['failure_count']}")
     print(f"baseline_trades={row['baseline']['trades']}")
     print(f"calibrated_trades={row['calibrated']['trades']}")
     print(f"net_r_delta={row['delta']['net_r']}")

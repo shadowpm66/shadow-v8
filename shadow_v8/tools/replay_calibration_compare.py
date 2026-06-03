@@ -120,10 +120,53 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def print_summary(rows: list[dict[str, Any]]) -> None:
+def evaluate_guard(
+    rows: list[dict[str, Any]],
+    *,
+    fail_on_worse: bool,
+    max_net_r_regression: float | None,
+    max_added_trades: int | None,
+) -> dict[str, Any]:
+    failures: list[dict[str, Any]] = []
+    for row in rows:
+        delta = row.get("delta") or {}
+        net_r_delta = delta.get("net_r")
+        trade_delta = int(delta.get("trades") or 0)
+        if fail_on_worse and row.get("verdict") == "worse":
+            failures.append({"symbol": row.get("symbol"), "reason": "worse_verdict", "net_r_delta": net_r_delta})
+        if max_net_r_regression is not None and net_r_delta is not None:
+            if float(net_r_delta) < -abs(max_net_r_regression):
+                failures.append(
+                    {
+                        "symbol": row.get("symbol"),
+                        "reason": "net_r_regression",
+                        "net_r_delta": net_r_delta,
+                        "limit": -abs(max_net_r_regression),
+                    }
+                )
+        if max_added_trades is not None and trade_delta > max_added_trades:
+            failures.append(
+                {
+                    "symbol": row.get("symbol"),
+                    "reason": "added_trades",
+                    "trade_delta": trade_delta,
+                    "limit": max_added_trades,
+                }
+            )
+    return {
+        "ok": not failures,
+        "failures": failures,
+        "failure_count": len(failures),
+        "fail_on_worse": fail_on_worse,
+        "max_net_r_regression": max_net_r_regression,
+        "max_added_trades": max_added_trades,
+    }
+
+
+def print_summary(rows: list[dict[str, Any]], guard: dict[str, Any] | None = None) -> None:
     aggregate = summarize_rows(rows)
     print("Replay calibration compare complete")
-    print("ok=True")
+    print(f"ok={bool((guard or {'ok': True})['ok'])}")
     print(f"files={len(rows)}")
     print(
         "overall_verdict={overall_verdict} improved={improved} unchanged={unchanged} worse={worse} "
@@ -139,6 +182,8 @@ def print_summary(rows: list[dict[str, Any]]) -> None:
             best_improvement=aggregate["best_improvement"],
         )
     )
+    if guard is not None:
+        print(f"guard_ok={guard['ok']} guard_failures={guard['failure_count']} failures={guard['failures']}")
     for row in rows:
         baseline = row["baseline"]
         calibrated = row["calibrated"]
@@ -174,6 +219,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--allow-short", action="store_true")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--no-write", action="store_true", help="Print comparison without writing JSON")
+    parser.add_argument("--fail-on-worse", action="store_true", help="Exit non-zero if any calibration verdict is worse")
+    parser.add_argument(
+        "--max-net-r-regression",
+        type=float,
+        help="Exit non-zero if any symbol loses more than this many R versus baseline",
+    )
+    parser.add_argument(
+        "--max-added-trades",
+        type=int,
+        help="Exit non-zero if calibration adds more than this many trades for any symbol",
+    )
     return parser.parse_args()
 
 
@@ -194,10 +250,24 @@ def main() -> None:
         )
         for path in files
     ]
-    summary = {"ok": True, "file_count": len(files), "aggregate": summarize_rows(rows), "results": rows}
+    guard = evaluate_guard(
+        rows,
+        fail_on_worse=args.fail_on_worse,
+        max_net_r_regression=args.max_net_r_regression,
+        max_added_trades=args.max_added_trades,
+    )
+    summary = {
+        "ok": guard["ok"],
+        "file_count": len(files),
+        "aggregate": summarize_rows(rows),
+        "guard": guard,
+        "results": rows,
+    }
     if not args.no_write:
         write_json(args.output_dir / "calibration_compare.json", summary)
-    print_summary(rows)
+    print_summary(rows, guard)
+    if not guard["ok"]:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
