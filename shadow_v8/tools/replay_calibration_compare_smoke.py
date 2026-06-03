@@ -36,6 +36,19 @@ def main() -> None:
         stage_row["calibration"]["allow_intraday_stage_calibration"] is True,
         "Comparison should expose intraday stage calibration mode",
     )
+    weekly_stage_row = compare_file(
+        files[0],
+        symbol="CALIBRATE",
+        asset_class="crypto",
+        min_bars=10,
+        allow_short=False,
+        calibrate_intraday_stage=True,
+        calibrate_intraday_weekly_stage=True,
+    )
+    assert_true(
+        weekly_stage_row["calibration"]["allow_intraday_weekly_stage_calibration"] is True,
+        "Comparison should expose intraday weekly-stage calibration mode",
+    )
     aggregate = summarize_rows([row])
     assert_true(aggregate["file_count"] == 1, "Aggregate should count compared files")
     assert_true(aggregate["overall_verdict"] == row["verdict"], "Aggregate should preserve single-file verdict")
@@ -72,6 +85,10 @@ def main() -> None:
     print(f"calibrated_trades={row['calibrated']['trades']}")
     print(f"net_r_delta={row['delta']['net_r']}")
     print(f"intraday_stage_calibration={stage_row['calibration']['allow_intraday_stage_calibration']}")
+    print(
+        "intraday_weekly_stage_calibration="
+        f"{weekly_stage_row['calibration']['allow_intraday_weekly_stage_calibration']}"
+    )
 
 
 if __name__ == "__main__":

@@ -527,16 +527,16 @@ class Scorer:
         if direction == "LONG":
             permission = stage.long_permission
             if not permission:
-                if stage.weekly_stage != Stage.STAGE_2:
+                if not stage.long_weekly_compatible:
                     reasons.append("weekly_not_stage2")
-                if stage.daily_stage not in (Stage.STAGE_2, Stage.STAGE_1, Stage.UNKNOWN):
+                if not stage.long_daily_compatible:
                     reasons.append("daily_not_long_compatible")
         elif direction == "SHORT":
             permission = stage.short_permission
             if not permission:
-                if stage.weekly_stage != Stage.STAGE_4:
+                if not stage.short_weekly_compatible:
                     reasons.append("weekly_not_stage4")
-                if stage.daily_stage not in (Stage.STAGE_4, Stage.STAGE_3, Stage.UNKNOWN):
+                if not stage.short_daily_compatible:
                     reasons.append("daily_not_short_compatible")
         else:
             reasons.append("no_direction_for_stage_permission")
@@ -547,6 +547,10 @@ class Scorer:
             "direction": direction,
             "weekly_stage": stage.weekly_stage.value,
             "daily_stage": stage.daily_stage.value,
+            "long_weekly_compatible": stage.long_weekly_compatible,
+            "short_weekly_compatible": stage.short_weekly_compatible,
+            "long_daily_compatible": stage.long_daily_compatible,
+            "short_daily_compatible": stage.short_daily_compatible,
             "long_permission": stage.long_permission,
             "short_permission": stage.short_permission,
             "risk_bias": stage.risk_bias,
