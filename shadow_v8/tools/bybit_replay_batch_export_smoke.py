@@ -79,6 +79,7 @@ def main() -> None:
             assert_true(digest["worst_net_r"] is not None, "Batch digest should expose worst net R row")
             assert_true(isinstance(digest["top_blockers"], dict), "Batch digest should include blocker counts")
             assert_true(isinstance(digest["top_stage_block_reasons"], dict), "Batch digest should include stage blocker counts")
+            assert_true("top_stage_block_detail" in validation_rows[0], "Batch validation should include stage block detail")
             assert_true(isinstance(digest["top_watch_reasons"], dict), "Batch digest should include watch reason counts")
             assert_true(isinstance(digest["suggested_next_focus"], list), "Batch digest should include tuning hints")
     finally:

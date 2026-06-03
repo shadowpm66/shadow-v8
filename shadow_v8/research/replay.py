@@ -18,7 +18,7 @@ from shadow_v8.structure.vcp_engine import VcpEngine
 from shadow_v8.structure.wm_detector import WmDetector
 
 
-REPLAY_SCHEMA_VERSION = "1.5.17"
+REPLAY_SCHEMA_VERSION = "1.5.18"
 
 
 class Replay:
@@ -245,6 +245,7 @@ class Replay:
         watch_reason_counter: Counter[str] = Counter()
         confirmation_counter: Counter[str] = Counter()
         stage_block_reason_counter: Counter[str] = Counter()
+        stage_block_detail_counter: Counter[str] = Counter()
         stage_pair_counter: Counter[str] = Counter()
         pivot_shift_bucket_counter: Counter[str] = Counter()
         pivot_shift_bucket_by_status: dict[str, Counter[str]] = {}
@@ -278,9 +279,13 @@ class Replay:
             if stage_gate:
                 weekly = str(stage_gate.get("weekly_stage") or "UNKNOWN")
                 daily = str(stage_gate.get("daily_stage") or "UNKNOWN")
+                direction = str(stage_gate.get("direction") or "UNKNOWN")
                 stage_pair_counter[f"{weekly}/{daily}"] += 1
                 if "stage_blocks_long" in blockers or "stage_blocks_short" in blockers:
-                    stage_block_reason_counter.update(str(item) for item in stage_gate.get("reasons", []))
+                    for item in stage_gate.get("reasons", []):
+                        reason = str(item)
+                        stage_block_reason_counter[reason] += 1
+                        stage_block_detail_counter[f"{reason}:{direction}:{weekly}/{daily}"] += 1
             for bucket in self._pivot_shift_buckets_from_reasons(watch_reasons):
                 pivot_shift_bucket_counter[bucket] += 1
                 pivot_shift_bucket_by_status.setdefault(status, Counter())[bucket] += 1
@@ -355,6 +360,7 @@ class Replay:
             "top_warnings": self._top_counts(warning_counter),
             "top_confirmations": self._top_counts(confirmation_counter),
             "top_stage_block_reasons": self._top_counts(stage_block_reason_counter),
+            "top_stage_block_details": self._top_counts(stage_block_detail_counter),
             "stage_pairs": dict(sorted(stage_pair_counter.items())),
             "pivot_shift_progress_buckets": dict(sorted(pivot_shift_bucket_counter.items())),
             "pivot_shift_progress_buckets_by_status": {

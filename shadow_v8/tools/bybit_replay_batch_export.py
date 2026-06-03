@@ -303,7 +303,8 @@ def main() -> None:
         for row in validation_rows:
             print(
                 "validation: symbol={symbol} trades={trades} net_r={net_r} "
-                "top_stage_block={top_stage_block_reason} top_watch={top_watch_reason}".format(**row)
+                "top_stage_block={top_stage_block_reason} top_stage_detail={top_stage_block_detail} "
+                "top_watch={top_watch_reason}".format(**row)
             )
     if calibration_rows:
         print_calibration_summary(calibration_rows, guard)
