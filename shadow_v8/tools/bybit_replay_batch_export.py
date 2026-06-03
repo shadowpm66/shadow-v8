@@ -92,6 +92,30 @@ def parse_symbols(raw: str) -> list[str]:
     return [item for item in symbols if item]
 
 
+def summarize_batch(
+    exports: list[dict[str, Any]],
+    validation_rows: list[dict[str, Any]],
+    calibration_rows: list[dict[str, Any]],
+    guard: dict[str, Any] | None,
+) -> dict[str, Any]:
+    exported_count = sum(1 for item in exports if item.get("ok"))
+    failed_exports = [item.get("symbol") for item in exports if not item.get("ok")]
+    validation_ranked = sorted(validation_rows, key=lambda row: float(row.get("net_r") or 0.0), reverse=True)
+    zero_trade_symbols = [row.get("symbol") for row in validation_rows if int(row.get("trades") or 0) == 0]
+    calibration_worse = [row.get("symbol") for row in calibration_rows if row.get("verdict") == "worse"]
+    return {
+        "exported_count": exported_count,
+        "failed_exports": failed_exports,
+        "validated_count": len(validation_rows),
+        "best_net_r": validation_ranked[0] if validation_ranked else None,
+        "worst_net_r": validation_ranked[-1] if validation_ranked else None,
+        "zero_trade_symbols": zero_trade_symbols,
+        "calibration_worse_symbols": calibration_worse,
+        "guard_ok": None if guard is None else guard.get("ok"),
+        "guard_failure_count": None if guard is None else guard.get("failure_count"),
+    }
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Export and optionally validate multiple Bybit replay CSV files.")
     parser.add_argument("--symbols", default="ETHUSDT,BTCUSDT,SOLUSDT", help="Comma-separated Bybit symbols")
@@ -145,10 +169,12 @@ def main() -> None:
             max_net_r_regression=0.0 if args.strict_guard else None,
             max_added_trades=0 if args.strict_guard else None,
         )
+    digest = summarize_batch(exports, validation_rows, calibration_rows, guard)
 
     payload = {
         "ok": all(item.get("ok") for item in exports) and (guard is None or guard["ok"]),
         "symbols": symbols,
+        "digest": digest,
         "exports": exports,
         "validation": validation_rows,
         "calibration": {
@@ -169,6 +195,18 @@ def main() -> None:
     print(f"ok={payload['ok']}")
     print(f"symbols={','.join(symbols)}")
     print(f"exports={sum(1 for item in exports if item.get('ok'))}/{len(exports)}")
+    print(
+        "digest: exported={exported_count} validated={validated_count} best={best} worst={worst} "
+        "zero_trade_symbols={zero_trade_symbols} calibration_worse={calibration_worse_symbols} guard_ok={guard_ok}".format(
+            exported_count=digest["exported_count"],
+            validated_count=digest["validated_count"],
+            best=(digest["best_net_r"] or {}).get("symbol"),
+            worst=(digest["worst_net_r"] or {}).get("symbol"),
+            zero_trade_symbols=digest["zero_trade_symbols"],
+            calibration_worse_symbols=digest["calibration_worse_symbols"],
+            guard_ok=digest["guard_ok"],
+        )
+    )
     for item in exports:
         print(
             "symbol={symbol} ok={ok} candles={candles} path={path}".format(
