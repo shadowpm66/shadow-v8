@@ -26,6 +26,7 @@ def compare_file(
     min_bars: int,
     allow_short: bool,
     calibrate_intraday_stage: bool = False,
+    calibrate_intraday_weekly_stage: bool = False,
 ) -> dict[str, Any]:
     baseline_result = run_file(
         path,
@@ -35,6 +36,7 @@ def compare_file(
         allow_short=allow_short,
         allow_near_entry_watch=False,
         allow_intraday_stage_calibration=False,
+        allow_intraday_weekly_stage_calibration=False,
     )
     calibrated_result = run_file(
         path,
@@ -44,6 +46,7 @@ def compare_file(
         allow_short=allow_short,
         allow_near_entry_watch=True,
         allow_intraday_stage_calibration=calibrate_intraday_stage,
+        allow_intraday_weekly_stage_calibration=calibrate_intraday_weekly_stage,
     )
     baseline = summary_row(baseline_result)
     calibrated = summary_row(calibrated_result)
@@ -62,6 +65,7 @@ def compare_file(
         "calibration": {
             "allow_near_entry_watch": True,
             "allow_intraday_stage_calibration": calibrate_intraday_stage,
+            "allow_intraday_weekly_stage_calibration": calibrate_intraday_weekly_stage,
         },
         "baseline": baseline,
         "calibrated": calibrated,
@@ -216,7 +220,8 @@ def print_summary(rows: list[dict[str, Any]], guard: dict[str, Any] | None = Non
             "calibrated_trades={calibrated_trades} trade_delta={trade_delta} "
             "baseline_net_r={baseline_net_r} calibrated_net_r={calibrated_net_r} "
             "net_r_delta={net_r_delta} baseline_top_watch={baseline_top_watch} "
-            "calibrated_top_watch={calibrated_top_watch} intraday_stage={intraday_stage}".format(
+            "calibrated_top_watch={calibrated_top_watch} intraday_stage={intraday_stage} "
+            "intraday_weekly_stage={intraday_weekly_stage}".format(
                 symbol=row["symbol"],
                 verdict=row["verdict"],
                 baseline_trades=baseline.get("trades"),
@@ -228,6 +233,9 @@ def print_summary(rows: list[dict[str, Any]], guard: dict[str, Any] | None = Non
                 baseline_top_watch=baseline.get("top_watch_reason"),
                 calibrated_top_watch=calibrated.get("top_watch_reason"),
                 intraday_stage=(row.get("calibration") or {}).get("allow_intraday_stage_calibration"),
+                intraday_weekly_stage=(row.get("calibration") or {}).get(
+                    "allow_intraday_weekly_stage_calibration"
+                ),
             )
         )
 
@@ -245,6 +253,11 @@ def parse_args() -> argparse.Namespace:
         "--calibrate-intraday-stage",
         action="store_true",
         help="Also test crypto/forex intraday stage compatibility in the calibrated replay.",
+    )
+    parser.add_argument(
+        "--calibrate-intraday-weekly-stage",
+        action="store_true",
+        help="Also test crypto/forex intraday weekly-stage compatibility in the calibrated replay.",
     )
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--no-write", action="store_true", help="Print comparison without writing JSON")
@@ -282,6 +295,7 @@ def main() -> None:
             min_bars=args.min_bars,
             allow_short=args.allow_short,
             calibrate_intraday_stage=args.calibrate_intraday_stage,
+            calibrate_intraday_weekly_stage=args.calibrate_intraday_weekly_stage,
         )
         for path in files
     ]

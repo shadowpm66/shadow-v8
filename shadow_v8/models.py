@@ -80,6 +80,10 @@ class MarketDataBundle:
 class StageState:
     weekly_stage: Stage = Stage.UNKNOWN
     daily_stage: Stage = Stage.UNKNOWN
+    long_weekly_compatible: bool = False
+    short_weekly_compatible: bool = False
+    long_daily_compatible: bool = False
+    short_daily_compatible: bool = False
     long_permission: bool = False
     short_permission: bool = False
     risk_bias: Literal["RISK_ON", "NEUTRAL", "DEFENSIVE", "OFF"] = "NEUTRAL"

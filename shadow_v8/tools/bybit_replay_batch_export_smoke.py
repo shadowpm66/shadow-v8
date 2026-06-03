@@ -62,10 +62,15 @@ def main() -> None:
                 min_bars=10,
                 allow_short=True,
                 calibrate_intraday_stage=True,
+                calibrate_intraday_weekly_stage=True,
             )
             assert_true(
                 all(row["calibration"]["allow_intraday_stage_calibration"] for row in calibration_rows),
                 "Batch compare should pass intraday stage calibration mode",
+            )
+            assert_true(
+                all(row["calibration"]["allow_intraday_weekly_stage_calibration"] for row in calibration_rows),
+                "Batch compare should pass intraday weekly-stage calibration mode",
             )
             digest = batch.summarize_batch(exports, validation_rows, [], None)
             assert_true(digest["exported_count"] == 3, "Batch digest should count exports")

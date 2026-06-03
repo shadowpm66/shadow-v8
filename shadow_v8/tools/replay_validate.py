@@ -28,11 +28,29 @@ def build_asset(symbol: str, asset_class: str, allow_short: bool) -> AssetConfig
     )
 
 
-def build_stage_engine(asset_class: str, allow_intraday_stage_calibration: bool) -> StageEngine:
-    if allow_intraday_stage_calibration and asset_class in ("crypto", "forex"):
+def build_stage_engine(
+    asset_class: str,
+    allow_intraday_stage_calibration: bool,
+    allow_intraday_weekly_stage_calibration: bool = False,
+) -> StageEngine:
+    if asset_class in ("crypto", "forex") and (
+        allow_intraday_stage_calibration or allow_intraday_weekly_stage_calibration
+    ):
+        long_weekly_stages = (Stage.STAGE_2,)
+        short_weekly_stages = (Stage.STAGE_4,)
+        if allow_intraday_weekly_stage_calibration:
+            long_weekly_stages = (Stage.STAGE_2, Stage.STAGE_1, Stage.STAGE_3, Stage.UNKNOWN)
+            short_weekly_stages = (Stage.STAGE_4, Stage.STAGE_3, Stage.STAGE_1, Stage.UNKNOWN)
+        long_daily_stages = (Stage.STAGE_2, Stage.STAGE_1, Stage.UNKNOWN)
+        short_daily_stages = (Stage.STAGE_4, Stage.STAGE_3, Stage.UNKNOWN)
+        if allow_intraday_stage_calibration:
+            long_daily_stages = (Stage.STAGE_2, Stage.STAGE_1, Stage.STAGE_3, Stage.UNKNOWN)
+            short_daily_stages = (Stage.STAGE_4, Stage.STAGE_3, Stage.STAGE_1, Stage.UNKNOWN)
         return StageEngine(
-            long_daily_stages=(Stage.STAGE_2, Stage.STAGE_1, Stage.STAGE_3, Stage.UNKNOWN),
-            short_daily_stages=(Stage.STAGE_4, Stage.STAGE_3, Stage.STAGE_1, Stage.UNKNOWN),
+            long_weekly_stages=long_weekly_stages,
+            short_weekly_stages=short_weekly_stages,
+            long_daily_stages=long_daily_stages,
+            short_daily_stages=short_daily_stages,
         )
     return StageEngine()
 
@@ -67,6 +85,7 @@ def run_file(
     allow_short: bool,
     allow_near_entry_watch: bool = False,
     allow_intraday_stage_calibration: bool = False,
+    allow_intraday_weekly_stage_calibration: bool = False,
 ) -> dict[str, Any]:
     candles = load_csv_candles(path)
     replay_symbol = symbol or symbol_from_path(path)
@@ -74,13 +93,18 @@ def run_file(
         asset=build_asset(replay_symbol, asset_class, allow_short),
         candles=candles,
         min_bars=min_bars,
-        stage_engine=build_stage_engine(asset_class, allow_intraday_stage_calibration),
+        stage_engine=build_stage_engine(
+            asset_class,
+            allow_intraday_stage_calibration,
+            allow_intraday_weekly_stage_calibration,
+        ),
         entry_policy=EntryPolicy(allow_near_entry_watch=allow_near_entry_watch),
         input_source={
             "type": "csv",
             "path": str(path),
             "allow_near_entry_watch": allow_near_entry_watch,
             "allow_intraday_stage_calibration": allow_intraday_stage_calibration,
+            "allow_intraday_weekly_stage_calibration": allow_intraday_weekly_stage_calibration,
         },
     ).run()
     return result
@@ -169,6 +193,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Calibration mode: use crypto/forex intraday daily-stage compatibility during replay only.",
     )
+    parser.add_argument(
+        "--allow-intraday-weekly-stage-calibration",
+        action="store_true",
+        help="Calibration mode: use crypto/forex intraday weekly-stage compatibility during replay only.",
+    )
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--no-write", action="store_true", help="Print results without writing JSON reports")
     return parser.parse_args()
@@ -191,6 +220,7 @@ def main() -> None:
             allow_short=args.allow_short,
             allow_near_entry_watch=args.allow_near_entry_watch,
             allow_intraday_stage_calibration=args.allow_intraday_stage_calibration,
+            allow_intraday_weekly_stage_calibration=args.allow_intraday_weekly_stage_calibration,
         )
         for path in files
     ]

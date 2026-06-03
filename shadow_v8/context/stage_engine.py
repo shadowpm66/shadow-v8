@@ -9,19 +9,27 @@ class StageEngine:
         self,
         weekly_ma: int = 30,
         daily_ma: int = 50,
+        long_weekly_stages: tuple[Stage, ...] | None = None,
+        short_weekly_stages: tuple[Stage, ...] | None = None,
         long_daily_stages: tuple[Stage, ...] | None = None,
         short_daily_stages: tuple[Stage, ...] | None = None,
     ) -> None:
         self.weekly_ma = weekly_ma
         self.daily_ma = daily_ma
+        self.long_weekly_stages = long_weekly_stages or (Stage.STAGE_2,)
+        self.short_weekly_stages = short_weekly_stages or (Stage.STAGE_4,)
         self.long_daily_stages = long_daily_stages or (Stage.STAGE_2, Stage.STAGE_1, Stage.UNKNOWN)
         self.short_daily_stages = short_daily_stages or (Stage.STAGE_4, Stage.STAGE_3, Stage.UNKNOWN)
 
     def evaluate(self, weekly: list[Candle], daily: list[Candle] | None = None) -> StageState:
         weekly_stage, weekly_reasons = self._stage_for(weekly, period=self.weekly_ma, label="Weekly")
         daily_stage, daily_reasons = self._stage_for(daily or [], period=self.daily_ma, label="Daily")
-        long_permission = weekly_stage == Stage.STAGE_2 and daily_stage in self.long_daily_stages
-        short_permission = weekly_stage == Stage.STAGE_4 and daily_stage in self.short_daily_stages
+        long_weekly_compatible = weekly_stage in self.long_weekly_stages
+        short_weekly_compatible = weekly_stage in self.short_weekly_stages
+        long_daily_compatible = daily_stage in self.long_daily_stages
+        short_daily_compatible = daily_stage in self.short_daily_stages
+        long_permission = long_weekly_compatible and long_daily_compatible
+        short_permission = short_weekly_compatible and short_daily_compatible
         if weekly_stage == Stage.STAGE_2 and daily_stage == Stage.STAGE_2:
             risk_bias = "RISK_ON"
         elif weekly_stage == Stage.STAGE_4:
@@ -33,6 +41,10 @@ class StageEngine:
         return StageState(
             weekly_stage=weekly_stage,
             daily_stage=daily_stage,
+            long_weekly_compatible=long_weekly_compatible,
+            short_weekly_compatible=short_weekly_compatible,
+            long_daily_compatible=long_daily_compatible,
+            short_daily_compatible=short_daily_compatible,
             long_permission=long_permission,
             short_permission=short_permission,
             risk_bias=risk_bias,
