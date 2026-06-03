@@ -57,6 +57,16 @@ def main() -> None:
             assert_true(all(Path(str(item["path"])).exists() for item in exports), "Batch export should write CSV files")
             validation_rows = batch.validate_exports(exports, min_bars=10, allow_short=True)
             assert_true(len(validation_rows) == 3, "Batch validation should produce one row per export")
+            calibration_rows = batch.compare_exports(
+                exports,
+                min_bars=10,
+                allow_short=True,
+                calibrate_intraday_stage=True,
+            )
+            assert_true(
+                all(row["calibration"]["allow_intraday_stage_calibration"] for row in calibration_rows),
+                "Batch compare should pass intraday stage calibration mode",
+            )
             digest = batch.summarize_batch(exports, validation_rows, [], None)
             assert_true(digest["exported_count"] == 3, "Batch digest should count exports")
             assert_true(digest["validated_count"] == 3, "Batch digest should count validations")
