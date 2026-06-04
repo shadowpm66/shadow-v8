@@ -43,6 +43,27 @@ class ExecutionRouter:
             return self._blocked(asset, "exit", f"No executor for {asset.broker}")
         return executor.apply_exit(asset, decision)
 
+    def preflight(self, asset: AssetConfig, action: str = "enter", direction: str | None = None) -> dict:
+        guard = self._guard(asset, action, direction)
+        executor_present = asset.broker in self.executors
+        if guard is None and not executor_present:
+            guard = self._blocked(asset, action, f"No executor for {asset.broker}")
+        if guard is not None:
+            guard["executor_present"] = executor_present
+            return guard
+        return {
+            "ok": True,
+            "symbol": asset.symbol,
+            "broker": asset.broker,
+            "asset_class": asset.asset_class,
+            "mode": self.mode,
+            "action": action,
+            "direction": direction,
+            "reason": "Execution preflight passed",
+            "safety_block": False,
+            "executor_present": True,
+        }
+
     def _guard(self, asset: AssetConfig, action: str, direction: str | None = None) -> dict | None:
         if not asset.enabled:
             return self._blocked(asset, action, "Asset disabled")
