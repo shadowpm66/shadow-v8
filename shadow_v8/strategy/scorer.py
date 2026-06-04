@@ -566,6 +566,14 @@ class Scorer:
             "stage_pair": stage_pair,
             "reason": "disabled",
         }
+        reference = ((context.metadata or {}).get("reference_confluence", {}) if context else {})
+        favorable_count = int(reference.get("favorable_count") or 0)
+        obstacle_count = int(reference.get("obstacle_count") or 0)
+        detail["reference"] = {
+            "favorable_count": favorable_count,
+            "obstacle_count": obstacle_count,
+            "flags": list(reference.get("flags") or []),
+        }
         if not self.allow_countertrend_reclaim_watch:
             return detail
         if direction not in ("LONG", "SHORT") or stage_blocker not in blockers:
@@ -584,14 +592,20 @@ class Scorer:
         if not any(item in confirmations for item in ("context_supportive", "reference_confluence")):
             detail["reason"] = "missing_context_or_reference"
             return detail
+        if obstacle_count > 0:
+            detail["reason"] = "reference_obstacle_bias"
+            return detail
+        if favorable_count < 2:
+            detail["reason"] = "missing_strong_reference_support"
+            return detail
         if not any(item in confirmations for item in ("stop_distance_good", "stop_distance_acceptable")):
             detail["reason"] = "stop_distance_not_valid"
             return detail
         if not pivot.reclaimed_or_lost:
             detail["reason"] = "pivot_not_reclaimed_or_lost"
             return detail
-        if not (pivot.retest_hold or pivot.confirmed):
-            detail["reason"] = "pivot_retest_not_held"
+        if not pivot.confirmed:
+            detail["reason"] = "pivot_shift_not_confirmed"
             return detail
         pivot_metadata = pivot.metadata or {}
         shift_state = str(pivot_metadata.get("shift_progress_state") or "")
