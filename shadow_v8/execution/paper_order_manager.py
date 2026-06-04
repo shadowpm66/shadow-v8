@@ -163,10 +163,11 @@ class PaperOrderManager:
 
             if self._stop_hit(position, high, low):
                 exit_price = float(position["stop"])
-                closed = self._close_position(position, exit_price, "Paper hard stop")
+                reason = self._stop_exit_reason(position)
+                closed = self._close_position(position, exit_price, reason)
                 positions.pop(symbol, None)
                 self.closed_store.append(closed)
-                events.append({"ok": True, "type": "EXIT", "symbol": symbol, "reason": "Paper hard stop", "trade": closed})
+                events.append({"ok": True, "type": "EXIT", "symbol": symbol, "reason": reason, "trade": closed})
                 changed = True
                 continue
 
@@ -323,6 +324,20 @@ class PaperOrderManager:
             return low <= target
         return False
 
+    def _stop_exit_reason(self, position: dict[str, Any]) -> str:
+        entry = float(position.get("entry") or 0.0)
+        stop = float(position.get("stop") or 0.0)
+        initial_stop = float(position.get("initial_stop") or stop)
+        direction = position.get("direction")
+        if self._has_lifecycle_event(position, "Trailing stop") and stop != initial_stop:
+            return "Paper trailing stop"
+        if bool(position.get("break_even_moved")):
+            if direction == "LONG" and stop >= entry:
+                return "Paper break-even stop"
+            if direction == "SHORT" and stop <= entry:
+                return "Paper break-even stop"
+        return "Paper hard stop"
+
     def _close_position(self, position: dict[str, Any], exit_price: float, reason: str) -> dict[str, Any]:
         entry = float(position.get("entry") or 0.0)
         qty = float(position.get("qty") or 0.0)
@@ -333,6 +348,8 @@ class PaperOrderManager:
         realized_r = float(position.get("realized_r") or 0.0) + r_gain
         closed_at = datetime.now(timezone.utc).isoformat()
         self._append_event(position, f"Closed @ {exit_price:.4f}: {reason}")
+        events = list((position.get("metadata") or {}).get("events") or [])
+        exit_type = self._exit_type(reason)
         return {
             "symbol": position.get("symbol"),
             "asset_class": position.get("asset_class"),
@@ -352,13 +369,54 @@ class PaperOrderManager:
             "grade": position.get("grade"),
             "setup_score": position.get("setup_score"),
             "exit_reason": reason,
+            "exit_type": exit_type,
             "realized_pnl": round(realized_pnl, 2),
             "r_multiple": round(realized_r, 3),
             "mfe_r": position.get("mfe_r"),
             "mae_r": position.get("mae_r"),
             "partial_taken": bool(position.get("partial_taken")),
             "break_even_moved": bool(position.get("break_even_moved")),
+            "lifecycle_events": events,
+            "exit_diagnostics": self._exit_diagnostics(position, reason, exit_type, realized_r),
             "metadata": position.get("metadata") or {},
+        }
+
+    def _exit_type(self, reason: str) -> str:
+        normalized = reason.lower().strip()
+        if "hard stop" in normalized:
+            return "hard_stop"
+        if "target" in normalized:
+            return "target"
+        if "partial" in normalized:
+            return "partial_take_profit"
+        if "break" in normalized and "even" in normalized:
+            return "break_even_stop"
+        if "trail" in normalized:
+            return "trailing_stop"
+        if "opposite structure" in normalized:
+            return "opposite_structure"
+        return "policy_exit"
+
+    def _exit_diagnostics(
+        self,
+        position: dict[str, Any],
+        reason: str,
+        exit_type: str,
+        r_multiple: float,
+    ) -> dict[str, Any]:
+        return {
+            "exit_type": exit_type,
+            "exit_reason": reason,
+            "r_multiple": round(float(r_multiple), 3),
+            "mfe_r": round(float(position.get("mfe_r") or 0.0), 3),
+            "mae_r": round(float(position.get("mae_r") or 0.0), 3),
+            "hit_hard_stop": exit_type == "hard_stop",
+            "target_hit": exit_type == "target",
+            "break_even_stop": exit_type == "break_even_stop",
+            "trailing_stop": exit_type == "trailing_stop",
+            "partial_taken": bool(position.get("partial_taken")),
+            "break_even_moved": bool(position.get("break_even_moved")),
+            "event_count": len((position.get("metadata") or {}).get("events") or []),
         }
 
     def _pnl(self, direction: str | None, entry: float, exit_price: float, qty: float) -> float:
@@ -377,3 +435,7 @@ class PaperOrderManager:
         metadata = position.setdefault("metadata", {})
         events = metadata.setdefault("events", [])
         events.append({"ts": datetime.now(timezone.utc).isoformat(), "text": text})
+
+    def _has_lifecycle_event(self, position: dict[str, Any], text: str) -> bool:
+        events = (position.get("metadata") or {}).get("events") or []
+        return any(text in str(event.get("text") or "") for event in events)
