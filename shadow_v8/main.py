@@ -30,6 +30,7 @@ from shadow_v8.data.stooq_market_data import StooqMarketData
 from shadow_v8.fundamentals.earnings_calendar import EarningsCalendar
 from shadow_v8.execution.execution_router import ExecutionRouter
 from shadow_v8.execution.paper_order_manager import PaperOrderManager
+from shadow_v8.execution.readiness import execution_readiness_report
 from shadow_v8.fundamentals.earnings_engine import EarningsEngine
 from shadow_v8.fundamentals.growth_engine import GrowthEngine
 from shadow_v8.fundamentals.sec_company_facts import SecCompanyFactsClient
@@ -134,6 +135,7 @@ def main() -> None:
             live_trading_enabled=_live_trading_enabled(),
             entries_paused=commands.entries_paused(),
             execution_preflight=_execution_preflight_status(router),
+            execution_readiness=_execution_readiness_status(router),
             errors=errors,
         )
         alerts.engine_warning(errors)
@@ -343,6 +345,21 @@ def _execution_preflight_status(
         ],
         "checks": checks[:20],
     }
+
+
+def _execution_readiness_status(router: ExecutionRouter | None = None) -> dict:
+    router = router or _execution_router(PaperOrderManager(account_balance=EXECUTION_CONFIG["paper_account_balance"]))
+    return execution_readiness_report(
+        assets=enabled_assets(),
+        broker_configs=BROKERS,
+        mode=EXECUTION_CONFIG["mode"],
+        live_trading_enabled={
+            "crypto": FEATURE_FLAGS["crypto_live_trading_enabled"],
+            "forex": FEATURE_FLAGS["crypto_live_trading_enabled"],
+            "stock": FEATURE_FLAGS["stock_live_trading_enabled"],
+        },
+        executors=router.executors,
+    )
 
 
 def _sync_paper_positions(scan_results: list[dict], paper: PaperOrderManager) -> None:

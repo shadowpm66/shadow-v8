@@ -324,6 +324,10 @@ def _engine_card(status: dict[str, Any]) -> str:
     preflight_ready = "READY" if preflight.get("ready") else "BLOCKED" if preflight.get("checked") else "UNKNOWN"
     top_blocks = preflight.get("top_block_reasons") or []
     top_block = top_blocks[0].get("reason") if top_blocks else "-"
+    readiness = status.get("execution_readiness") or {}
+    readiness_state = "READY" if readiness.get("ready") else "BLOCKED" if readiness.get("brokers_checked") else "UNKNOWN"
+    readiness_blocks = readiness.get("top_blockers") or []
+    readiness_block = readiness_blocks[0].get("reason") if readiness_blocks else "-"
     return f"""
       <section class="card">
         <h2>Engine</h2>
@@ -337,6 +341,8 @@ def _engine_card(status: dict[str, Any]) -> str:
           <dt>Execution</dt><dd>{_e(preflight_ready)}</dd>
           <dt>Preflight</dt><dd>{_e(preflight.get("passed", "-"))}/{_e(preflight.get("checked", "-"))} pass</dd>
           <dt>Top block</dt><dd>{_e(top_block)}</dd>
+          <dt>Readiness</dt><dd>{_e(readiness_state)}</dd>
+          <dt>Ready block</dt><dd>{_e(readiness_block)}</dd>
           <dt>Scan count</dt><dd>{_e(scan_count)}</dd>
           <dt>Cycle sec</dt><dd>{_e(duration)}</dd>
         </dl>
