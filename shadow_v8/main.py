@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from collections import Counter
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
@@ -132,6 +133,7 @@ def main() -> None:
             mode=_engine_mode_label(),
             live_trading_enabled=_live_trading_enabled(),
             entries_paused=commands.entries_paused(),
+            execution_preflight=_execution_preflight_status(router),
             errors=errors,
         )
         alerts.engine_warning(errors)
@@ -298,6 +300,49 @@ def _execution_router(paper: PaperOrderManager) -> ExecutionRouter:
             "stock": FEATURE_FLAGS["stock_live_trading_enabled"],
         },
     )
+
+
+def _execution_preflight_status(
+    router: ExecutionRouter | None = None,
+    *,
+    mode: str | None = None,
+) -> dict:
+    mode_label = (mode or EXECUTION_CONFIG["mode"]).lower().strip()
+    router = router or _execution_router(PaperOrderManager(account_balance=EXECUTION_CONFIG["paper_account_balance"]))
+    checks = []
+    for asset in enabled_assets():
+        direction = "LONG" if asset.allow_long else "SHORT" if asset.allow_short else None
+        execution_asset = _paper_execution_asset(asset) if mode_label == "paper" else asset
+        check = router.preflight(execution_asset, action="enter", direction=direction)
+        checks.append(
+            {
+                "symbol": check.get("symbol"),
+                "broker": check.get("broker"),
+                "asset_class": check.get("asset_class"),
+                "action": check.get("action"),
+                "direction": check.get("direction"),
+                "ok": bool(check.get("ok")),
+                "safety_block": bool(check.get("safety_block")),
+                "reason": check.get("reason"),
+                "executor_present": bool(check.get("executor_present")),
+            }
+        )
+
+    reason_counts = Counter(str(check.get("reason") or "unknown") for check in checks if check.get("safety_block"))
+    passed = sum(1 for check in checks if check.get("ok"))
+    blocked = sum(1 for check in checks if check.get("safety_block"))
+    return {
+        "mode": mode_label,
+        "ready": passed > 0 and blocked == 0,
+        "checked": len(checks),
+        "passed": passed,
+        "blocked": blocked,
+        "top_block_reasons": [
+            {"reason": reason, "count": count}
+            for reason, count in reason_counts.most_common(5)
+        ],
+        "checks": checks[:20],
+    }
 
 
 def _sync_paper_positions(scan_results: list[dict], paper: PaperOrderManager) -> None:
