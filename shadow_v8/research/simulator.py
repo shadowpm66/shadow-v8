@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from shadow_v8.config import EXECUTION_CONFIG
 from shadow_v8.models import AssetConfig, Candle, EntryDecision, PositionState
 from shadow_v8.strategy.exit_policy import ExitPolicy
 
@@ -67,8 +68,11 @@ class Simulator:
     def close_position(self, candle: Candle, reason: str) -> dict[str, Any]:
         if self.position is None:
             raise RuntimeError("No open synthetic position to close")
+        self._mark_to_market(candle)
         position = self.position
         r_multiple = self._r_multiple(candle.close)
+        exit_type = self._exit_type(reason)
+        exit_diagnostics = self._exit_diagnostics(position, reason, r_multiple)
         setup_metadata = position.metadata.get("setup_metadata", {})
         trade = {
             "symbol": position.symbol,
@@ -80,6 +84,8 @@ class Simulator:
             "opened_at": position.opened_at.isoformat(),
             "closed_at": candle.timestamp.isoformat(),
             "reason": reason,
+            "exit_reason": reason,
+            "exit_type": exit_type,
             "setup_class": position.setup_class,
             "grade": position.grade,
             "setup_metadata": setup_metadata,
@@ -89,6 +95,7 @@ class Simulator:
             "mae": round(float(position.metadata.get("mae", 0.0)), 6),
             "mfe": round(float(position.metadata.get("mfe", 0.0)), 6),
             "r_multiple": round(r_multiple, 6),
+            "exit_diagnostics": exit_diagnostics,
         }
         self.trades.append(trade)
         self.position = None
@@ -153,3 +160,45 @@ class Simulator:
         if self.position.direction == "LONG":
             return (exit_price - self.position.entry) / risk
         return (self.position.entry - exit_price) / risk
+
+    def _exit_type(self, reason: str) -> str:
+        normalized = reason.lower().strip()
+        if "hard stop" in normalized:
+            return "hard_stop"
+        if "end of replay" in normalized:
+            return "end_of_replay"
+        if "target" in normalized:
+            return "target"
+        if "partial" in normalized:
+            return "partial_take_profit"
+        if "break" in normalized and "even" in normalized:
+            return "break_even_stop"
+        if "trail" in normalized:
+            return "trailing_stop"
+        return "policy_exit"
+
+    def _exit_diagnostics(self, position: PositionState, reason: str, r_multiple: float) -> dict[str, Any]:
+        max_r = float(position.metadata.get("max_r", 0.0))
+        min_r = float(position.metadata.get("min_r", 0.0))
+        partial_trigger = float(EXECUTION_CONFIG["paper_partial_r"])
+        break_even_trigger = float(EXECUTION_CONFIG["paper_break_even_r"])
+        trail_trigger = float(EXECUTION_CONFIG["paper_trail_start_r"])
+        exit_type = self._exit_type(reason)
+        return {
+            "exit_type": exit_type,
+            "exit_reason": reason,
+            "r_multiple": round(r_multiple, 6),
+            "max_r": round(max_r, 6),
+            "min_r": round(min_r, 6),
+            "mae": round(float(position.metadata.get("mae", 0.0)), 6),
+            "mfe": round(float(position.metadata.get("mfe", 0.0)), 6),
+            "bars_held": int(position.metadata.get("bars_held", 0)),
+            "hit_hard_stop": exit_type == "hard_stop",
+            "closed_at_end": exit_type == "end_of_replay",
+            "partial_candidate": max_r >= partial_trigger,
+            "break_even_candidate": max_r >= break_even_trigger,
+            "trail_candidate": max_r >= trail_trigger,
+            "partial_trigger_r": partial_trigger,
+            "break_even_trigger_r": break_even_trigger,
+            "trail_trigger_r": trail_trigger,
+        }

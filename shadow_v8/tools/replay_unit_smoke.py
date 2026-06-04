@@ -51,13 +51,19 @@ def check_replay_fixture() -> dict:
     fixture_asset, fixture_candles, min_bars = load_fixture()
     result = Replay(asset=fixture_asset, candles=fixture_candles, min_bars=min_bars).run()
     assert_true(result["ok"] is True, "Replay fixture result should be ok=True")
-    assert_true(result["schema_version"] == "1.5.19", "Replay result should include schema_version")
+    assert_true(result["schema_version"] == "1.5.20", "Replay result should include schema_version")
     assert_true("metrics" in result, "Replay result should include metrics")
     assert_true("breakdowns" in result, "Replay result should include breakdowns")
     assert_true("gate_analytics" in result, "Replay result should include gate analytics")
     assert_true(result["bars_processed"] == len(fixture_candles), "Replay should return bars_processed")
     assert_true(result["skipped_setup_count"] > 0, "Replay should record skipped setups")
     assert_true("action_counts" in result["breakdowns"], "Replay result should include action counts")
+    assert_true("exit_type_breakdown" in result["breakdowns"], "Replay result should include exit type breakdown")
+    assert_true("exit_reason_breakdown" in result["breakdowns"], "Replay result should include exit reason breakdown")
+    assert_true(
+        "lifecycle_candidate_breakdown" in result["breakdowns"],
+        "Replay result should include lifecycle candidate breakdown",
+    )
     assert_true("confirmation" in result["skipped_setups"][0], "Skipped setups should include confirmation fields")
     assert_true("base" in result["skipped_setups"][0]["confirmation"], "Confirmation should include base fields")
     assert_true("vcp" in result["skipped_setups"][0]["confirmation"], "Confirmation should include VCP fields")
@@ -140,9 +146,14 @@ def check_long_simulator() -> dict:
     opened = candle("2026-02-01T00:00:00", 100.0, 101.0, 99.0, 100.0)
     simulator.open_position(unit_asset, entry_decision("LONGUNIT", "LONG", entry=100.0, stop=95.0), opened)
     simulator.on_bar(candle("2026-02-02T00:00:00", 100.0, 106.0, 98.0, 104.0))
-    trade = simulator.close_position(candle("2026-02-03T00:00:00", 104.0, 111.0, 103.0, 110.0), "Unit close")
+    trade = simulator.close_position(candle("2026-02-03T00:00:00", 104.0, 116.0, 103.0, 110.0), "Unit close")
     assert_true(trade["r_multiple"] == 2.0, "LONG R-multiple should be 2.0")
     assert_true("mae" in trade and "mfe" in trade, "LONG trade should include MAE/MFE")
+    assert_true(trade["exit_type"] == "policy_exit", "LONG trade should include policy exit type")
+    assert_true("exit_diagnostics" in trade, "LONG trade should include exit diagnostics")
+    assert_true(trade["exit_diagnostics"]["partial_candidate"] is True, "LONG trade should flag partial candidate")
+    assert_true(trade["exit_diagnostics"]["break_even_candidate"] is True, "LONG trade should flag break-even candidate")
+    assert_true(trade["exit_diagnostics"]["trail_candidate"] is True, "LONG trade should flag trail candidate")
     return trade
 
 
@@ -155,6 +166,9 @@ def check_short_simulator() -> dict:
     trade = simulator.close_position(candle("2026-03-03T00:00:00", 96.0, 97.0, 89.0, 90.0), "Unit close")
     assert_true(trade["r_multiple"] == 2.0, "SHORT R-multiple should be 2.0")
     assert_true("mae" in trade and "mfe" in trade, "SHORT trade should include MAE/MFE")
+    assert_true(trade["exit_type"] == "policy_exit", "SHORT trade should include policy exit type")
+    assert_true("exit_diagnostics" in trade, "SHORT trade should include exit diagnostics")
+    assert_true(trade["exit_diagnostics"]["partial_candidate"] is True, "SHORT trade should flag partial candidate")
     return trade
 
 
