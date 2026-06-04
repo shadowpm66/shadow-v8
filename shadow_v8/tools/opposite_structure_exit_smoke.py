@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from shadow_v8.models import AssetConfig, Candle, EntryDecision, SetupDecision, StructureSignal
+from shadow_v8.research.replay import Replay
 from shadow_v8.research.simulator import Simulator
 
 
@@ -99,15 +100,34 @@ def check_short_exits_on_bullish_w() -> dict:
     return trade
 
 
+def check_exit_analytics(long_trade: dict, short_trade: dict) -> dict:
+    analytics = Replay(asset=asset("ANALYTICS"), candles=[])._build_exit_analytics([long_trade, short_trade])
+    assert_true(analytics["opposite_structure_exit_count"] == 2, "Exit analytics should count opposite exits")
+    assert_true(analytics["opposite_structure_exit_rate"] == 1.0, "Exit analytics should calculate opposite exit rate")
+    assert_true(
+        analytics["opposite_structure_by_direction"] == {"LONG": 1, "SHORT": 1},
+        "Exit analytics should count directions",
+    )
+    assert_true(
+        analytics["opposite_structure_by_signal_type"] == {"M": 1, "W": 1},
+        "Exit analytics should count opposite signal types",
+    )
+    assert_true(len(analytics["opposite_structure_samples"]) == 2, "Exit analytics should include samples")
+    return analytics
+
+
 def main() -> None:
     long_trade = check_long_exits_on_bearish_m()
     short_trade = check_short_exits_on_bullish_w()
+    analytics = check_exit_analytics(long_trade, short_trade)
     print("Opposite structure exit smoke complete")
     print("ok=True")
     print(f"long_exit_type={long_trade['exit_type']}")
     print(f"long_exit_reason={long_trade['exit_reason']}")
     print(f"short_exit_type={short_trade['exit_type']}")
     print(f"short_exit_reason={short_trade['exit_reason']}")
+    print(f"opposite_structure_exit_count={analytics['opposite_structure_exit_count']}")
+    print(f"opposite_structure_by_signal_type={analytics['opposite_structure_by_signal_type']}")
 
 
 if __name__ == "__main__":
