@@ -18,7 +18,7 @@ from shadow_v8.structure.vcp_engine import VcpEngine
 from shadow_v8.structure.wm_detector import WmDetector
 
 
-REPLAY_SCHEMA_VERSION = "1.5.22"
+REPLAY_SCHEMA_VERSION = "1.5.23"
 
 
 class Replay:
@@ -134,6 +134,7 @@ class Replay:
         trades = summary["trades"]
         metrics = self._build_metrics(trades, skipped_setups)
         breakdowns = self._build_breakdowns(trades, skipped_setups, action_counts)
+        exit_analytics = self._build_exit_analytics(trades)
         gate_analytics = self._build_gate_analytics(trades, skipped_setups)
         input_source = self._build_input_source()
         return {
@@ -152,6 +153,7 @@ class Replay:
             "input_source": input_source,
             "metrics": metrics,
             "breakdowns": breakdowns,
+            "exit_analytics": exit_analytics,
             "gate_analytics": gate_analytics,
             "skipped_setups": skipped_setups,
             "skipped_setup_count": len(skipped_setups),
@@ -259,6 +261,52 @@ class Replay:
             "lifecycle_candidate_breakdown": dict(sorted(lifecycle_candidate_counter.items())),
             "lifecycle_event_breakdown": dict(sorted(lifecycle_event_counter.items())),
         }
+
+    def _build_exit_analytics(self, trades: list[dict[str, Any]]) -> dict[str, Any]:
+        opposite_structure_trades = [
+            trade for trade in trades if str(trade.get("exit_type") or "") == "opposite_structure"
+        ]
+        direction_counter: Counter[str] = Counter()
+        structure_counter: Counter[str] = Counter()
+        samples: list[dict[str, Any]] = []
+        for trade in opposite_structure_trades:
+            direction_counter[str(trade.get("direction") or "UNKNOWN")] += 1
+            signal = self._opposite_structure_signal(trade)
+            if signal:
+                structure_counter[str(signal.get("structure_type") or "UNKNOWN")] += 1
+            if len(samples) < 10:
+                samples.append(
+                    {
+                        "symbol": trade.get("symbol"),
+                        "direction": trade.get("direction"),
+                        "opened_at": trade.get("opened_at"),
+                        "closed_at": trade.get("closed_at"),
+                        "r_multiple": trade.get("r_multiple"),
+                        "exit_reason": trade.get("exit_reason") or trade.get("reason"),
+                        "structure_type": signal.get("structure_type") if signal else None,
+                        "structure_direction": signal.get("structure_direction") if signal else None,
+                        "structure_quality_score": signal.get("quality_score") if signal else None,
+                        "neckline": signal.get("neckline") if signal else None,
+                    }
+                )
+        r_values = [float(trade.get("r_multiple", 0.0)) for trade in opposite_structure_trades]
+        total_trades = len(trades)
+        count = len(opposite_structure_trades)
+        return {
+            "opposite_structure_exit_count": count,
+            "opposite_structure_exit_rate": self._round(count / total_trades) if total_trades else 0.0,
+            "opposite_structure_by_direction": dict(sorted(direction_counter.items())),
+            "opposite_structure_by_signal_type": dict(sorted(structure_counter.items())),
+            "opposite_structure_average_r": self._round(self._average(r_values)),
+            "opposite_structure_net_r": self._round(sum(r_values)),
+            "opposite_structure_samples": samples,
+        }
+
+    def _opposite_structure_signal(self, trade: dict[str, Any]) -> dict[str, Any] | None:
+        for event in trade.get("lifecycle_events") or []:
+            if str(event.get("reason") or "") == "Replay opposite structure exit":
+                return event
+        return None
 
     def _build_gate_analytics(self, trades: list[dict[str, Any]], skipped_setups: list[dict[str, Any]]) -> dict[str, Any]:
         status_counter: Counter[str] = Counter()
