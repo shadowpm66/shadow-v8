@@ -63,6 +63,7 @@ def main() -> None:
                 allow_short=True,
                 calibrate_intraday_stage=True,
                 calibrate_intraday_weekly_stage=True,
+                calibrate_countertrend_reclaim=True,
             )
             assert_true(
                 all(row["calibration"]["allow_intraday_stage_calibration"] for row in calibration_rows),
@@ -71,6 +72,10 @@ def main() -> None:
             assert_true(
                 all(row["calibration"]["allow_intraday_weekly_stage_calibration"] for row in calibration_rows),
                 "Batch compare should pass intraday weekly-stage calibration mode",
+            )
+            assert_true(
+                all(row["calibration"]["allow_countertrend_reclaim_calibration"] for row in calibration_rows),
+                "Batch compare should pass countertrend reclaim calibration mode",
             )
             digest = batch.summarize_batch(exports, validation_rows, [], None)
             assert_true(digest["exported_count"] == 3, "Batch digest should count exports")
@@ -91,6 +96,7 @@ def main() -> None:
     print("validation_rows=3")
     print("digest=enabled")
     print("tuning_hints=enabled")
+    print("countertrend_reclaim_calibration=enabled")
 
 
 if __name__ == "__main__":

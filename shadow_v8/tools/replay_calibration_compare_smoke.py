@@ -49,6 +49,22 @@ def main() -> None:
         weekly_stage_row["calibration"]["allow_intraday_weekly_stage_calibration"] is True,
         "Comparison should expose intraday weekly-stage calibration mode",
     )
+    countertrend_row = compare_file(
+        files[0],
+        symbol="CALIBRATE",
+        asset_class="crypto",
+        min_bars=10,
+        allow_short=False,
+        calibrate_countertrend_reclaim=True,
+    )
+    assert_true(
+        countertrend_row["calibration"]["allow_countertrend_reclaim_calibration"] is True,
+        "Comparison should expose countertrend reclaim calibration mode",
+    )
+    assert_true(
+        "countertrend_reclaim_candidates" in countertrend_row["delta"],
+        "Comparison delta should include countertrend reclaim candidates",
+    )
     aggregate = summarize_rows([row])
     assert_true(aggregate["file_count"] == 1, "Aggregate should count compared files")
     assert_true(aggregate["overall_verdict"] == row["verdict"], "Aggregate should preserve single-file verdict")
@@ -89,6 +105,11 @@ def main() -> None:
         "intraday_weekly_stage_calibration="
         f"{weekly_stage_row['calibration']['allow_intraday_weekly_stage_calibration']}"
     )
+    print(
+        "countertrend_reclaim_calibration="
+        f"{countertrend_row['calibration']['allow_countertrend_reclaim_calibration']}"
+    )
+    print(f"countertrend_reclaim_delta={countertrend_row['delta']['countertrend_reclaim_candidates']}")
 
 
 if __name__ == "__main__":

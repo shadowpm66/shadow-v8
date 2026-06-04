@@ -11,6 +11,7 @@ from shadow_v8.context.stage_engine import StageEngine
 from shadow_v8.models import AssetConfig, Stage
 from shadow_v8.research.replay import Replay
 from shadow_v8.strategy.entry_policy import EntryPolicy
+from shadow_v8.strategy.scorer import Scorer
 from shadow_v8.tools.replay_csv import load_csv_candles
 
 
@@ -86,6 +87,7 @@ def run_file(
     allow_near_entry_watch: bool = False,
     allow_intraday_stage_calibration: bool = False,
     allow_intraday_weekly_stage_calibration: bool = False,
+    allow_countertrend_reclaim_calibration: bool = False,
 ) -> dict[str, Any]:
     candles = load_csv_candles(path)
     replay_symbol = symbol or symbol_from_path(path)
@@ -98,13 +100,18 @@ def run_file(
             allow_intraday_stage_calibration,
             allow_intraday_weekly_stage_calibration,
         ),
-        entry_policy=EntryPolicy(allow_near_entry_watch=allow_near_entry_watch),
+        scorer=Scorer(allow_countertrend_reclaim_watch=allow_countertrend_reclaim_calibration),
+        entry_policy=EntryPolicy(
+            allow_near_entry_watch=allow_near_entry_watch,
+            allow_countertrend_reclaim_entry=allow_countertrend_reclaim_calibration,
+        ),
         input_source={
             "type": "csv",
             "path": str(path),
             "allow_near_entry_watch": allow_near_entry_watch,
             "allow_intraday_stage_calibration": allow_intraday_stage_calibration,
             "allow_intraday_weekly_stage_calibration": allow_intraday_weekly_stage_calibration,
+            "allow_countertrend_reclaim_calibration": allow_countertrend_reclaim_calibration,
         },
     ).run()
     return result
@@ -160,6 +167,7 @@ def summary_row(result: dict[str, Any]) -> dict[str, Any]:
         "top_pivot_shift_bucket": top_pivot_shift_bucket,
         "top_watch_readiness": top_watch_readiness,
         "near_entry_watch_samples": len(gate.get("near_entry_watch_samples", [])),
+        "countertrend_reclaim_candidates": gate.get("countertrend_reclaim_candidates", 0),
         "top_allowed_non_entry_reason": top_allowed_non_entry,
         "validation_notes": gate.get("validation_notes", []),
     }
@@ -182,7 +190,8 @@ def print_summary(rows: list[dict[str, Any]]) -> None:
             "top_allowed_non_entry_reason={top_allowed_non_entry_reason} top_blocker={top_blocker} "
             "top_stage_block_reason={top_stage_block_reason} top_stage_block_detail={top_stage_block_detail} "
             "top_watch_reason={top_watch_reason} top_pivot_shift_bucket={top_pivot_shift_bucket} "
-            "top_watch_readiness={top_watch_readiness} near_entry_watch_samples={near_entry_watch_samples}".format(**row)
+            "top_watch_readiness={top_watch_readiness} near_entry_watch_samples={near_entry_watch_samples} "
+            "countertrend_reclaim_candidates={countertrend_reclaim_candidates}".format(**row)
         )
 
 
@@ -208,6 +217,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Calibration mode: use crypto/forex intraday weekly-stage compatibility during replay only.",
     )
+    parser.add_argument(
+        "--allow-countertrend-reclaim-calibration",
+        action="store_true",
+        help="Calibration mode: test strict counter-trend reclaim WATCH/entry handling during replay only.",
+    )
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--no-write", action="store_true", help="Print results without writing JSON reports")
     return parser.parse_args()
@@ -231,6 +245,7 @@ def main() -> None:
             allow_near_entry_watch=args.allow_near_entry_watch,
             allow_intraday_stage_calibration=args.allow_intraday_stage_calibration,
             allow_intraday_weekly_stage_calibration=args.allow_intraday_weekly_stage_calibration,
+            allow_countertrend_reclaim_calibration=args.allow_countertrend_reclaim_calibration,
         )
         for path in files
     ]

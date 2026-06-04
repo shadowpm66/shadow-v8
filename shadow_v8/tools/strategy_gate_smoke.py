@@ -677,6 +677,65 @@ def check_stacked_obstacle_reference_block() -> None:
     assert_true(entry.action == "SKIP", "Stacked opposing reference should skip")
 
 
+def check_countertrend_reclaim_calibration() -> None:
+    countertrend_stage = StageState(
+        weekly_stage=Stage.STAGE_4,
+        daily_stage=Stage.STAGE_4,
+        long_weekly_compatible=False,
+        long_daily_compatible=False,
+        short_weekly_compatible=True,
+        short_daily_compatible=True,
+        long_permission=False,
+        short_permission=True,
+        risk_bias="RISK_ON",
+    )
+    default_setup = Scorer().score(
+        "CTR_DEFAULT",
+        countertrend_stage,
+        base(),
+        vcp(),
+        structure(),
+        nested(),
+        pivot(),
+        context=context(),
+    )
+    calibrated_setup = Scorer(allow_countertrend_reclaim_watch=True).score(
+        "CTR_CALIBRATED",
+        countertrend_stage,
+        base(),
+        vcp(),
+        structure(),
+        nested(),
+        pivot(),
+        context=context(),
+    )
+    default_gate = default_setup.metadata["trade_gate"]
+    calibrated_gate = calibrated_setup.metadata["trade_gate"]
+    default_entry = EntryPolicy(allow_countertrend_reclaim_entry=True).decide(
+        asset(), default_setup, RiskManager().evaluate(asset(), default_setup)
+    )
+    calibrated_entry = EntryPolicy(allow_countertrend_reclaim_entry=True).decide(
+        asset(), calibrated_setup, RiskManager().evaluate(asset(), calibrated_setup)
+    )
+    assert_true(default_gate["status"] == "BLOCK", "Default countertrend stage setup should remain blocked")
+    assert_true("stage_blocks_long" in default_gate["blockers"], "Default gate should keep long stage block")
+    assert_true(calibrated_gate["status"] == "WATCH", "Calibration should downgrade strict reclaim to watch")
+    assert_true(
+        "countertrend_reclaim_calibration" in calibrated_gate["watch_reasons"],
+        "Calibration watch should expose countertrend reclaim reason",
+    )
+    assert_true(
+        calibrated_gate["countertrend_reclaim"]["candidate"] is True,
+        "Calibration gate should mark strict reclaim candidate metadata",
+    )
+    assert_true(default_entry.action == "SKIP", "Default blocked countertrend setup should skip")
+    assert_true(calibrated_entry.action == "ENTER", "Calibration entry policy should enter strict reclaim watch")
+    assert_true(
+        calibrated_entry.metadata.get("countertrend_reclaim_override") is True,
+        "Calibration entry should mark countertrend reclaim override",
+    )
+
+
 def main() -> None:
     check_approved_gate()
     check_watch_gate()
@@ -691,6 +750,7 @@ def main() -> None:
     check_blocked_gate()
     check_mixed_reference_watch_gate()
     check_stacked_obstacle_reference_block()
+    check_countertrend_reclaim_calibration()
     print("Strategy gate smoke complete")
     print("ok=True")
     print("approved_gate=ALLOW")
@@ -705,6 +765,7 @@ def main() -> None:
     print("directional_pivot_states=enabled")
     print("developing_directional_vcp=MONITOR")
     print("pivot_shift_progress=granular")
+    print("countertrend_reclaim_calibration=explicit")
 
 
 if __name__ == "__main__":
