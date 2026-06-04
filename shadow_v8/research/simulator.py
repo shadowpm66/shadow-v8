@@ -43,6 +43,13 @@ class Simulator:
                 "max_r": 0.0,
                 "min_r": 0.0,
                 "bars_held": 0,
+                "initial_qty": self.qty,
+                "initial_stop": stop,
+                "initial_risk_per_unit": abs(entry - stop),
+                "realized_r": 0.0,
+                "closed_qty": 0.0,
+                "lifecycle_events": [],
+                "target": decision.target,
             },
         )
         self.position = position
@@ -54,6 +61,14 @@ class Simulator:
             return None
         self.position.metadata["bars_held"] = int(self.position.metadata.get("bars_held", 0)) + 1
         self._mark_to_market(candle)
+        if self._stop_hit(candle):
+            return self.close_position_at_price(candle, self.position.stop, "Replay hard stop")
+        self._maybe_partial(candle)
+        self._maybe_break_even()
+        self._maybe_trail(candle.close)
+        if self._target_hit(candle):
+            target = float(self.position.metadata["target"])
+            return self.close_position_at_price(candle, target, "Replay target")
         decision = self.exit_policy.decide(self.position, candle.close)
         if decision.action == "EXIT":
             return self.close_position(candle, decision.reason)
@@ -63,14 +78,20 @@ class Simulator:
         if self.position is None:
             return None
         self._mark_to_market(candle)
+        self._maybe_partial(candle)
+        self._maybe_break_even()
+        self._maybe_trail(candle.close)
         return self.close_position(candle, "End of replay")
 
     def close_position(self, candle: Candle, reason: str) -> dict[str, Any]:
+        return self.close_position_at_price(candle, candle.close, reason)
+
+    def close_position_at_price(self, candle: Candle, exit_price: float, reason: str) -> dict[str, Any]:
         if self.position is None:
             raise RuntimeError("No open synthetic position to close")
         self._mark_to_market(candle)
         position = self.position
-        r_multiple = self._r_multiple(candle.close)
+        r_multiple = self._total_r_multiple(exit_price)
         exit_type = self._exit_type(reason)
         exit_diagnostics = self._exit_diagnostics(position, reason, r_multiple)
         setup_metadata = position.metadata.get("setup_metadata", {})
@@ -78,9 +99,12 @@ class Simulator:
             "symbol": position.symbol,
             "direction": position.direction,
             "qty": position.qty,
+            "initial_qty": round(float(position.metadata.get("initial_qty", position.qty)), 6),
+            "closed_qty": round(float(position.metadata.get("closed_qty", 0.0)) + position.qty, 6),
             "entry": round(position.entry, 6),
-            "exit": round(candle.close, 6),
+            "exit": round(exit_price, 6),
             "stop": round(position.stop, 6),
+            "initial_stop": round(float(position.metadata.get("initial_stop", position.stop)), 6),
             "opened_at": position.opened_at.isoformat(),
             "closed_at": candle.timestamp.isoformat(),
             "reason": reason,
@@ -95,6 +119,10 @@ class Simulator:
             "mae": round(float(position.metadata.get("mae", 0.0)), 6),
             "mfe": round(float(position.metadata.get("mfe", 0.0)), 6),
             "r_multiple": round(r_multiple, 6),
+            "realized_r": round(float(position.metadata.get("realized_r", 0.0)), 6),
+            "partial_taken": bool(position.partial_taken),
+            "break_even_moved": bool(position.break_even_moved),
+            "lifecycle_events": list(position.metadata.get("lifecycle_events", [])),
             "exit_diagnostics": exit_diagnostics,
         }
         self.trades.append(trade)
@@ -149,7 +177,7 @@ class Simulator:
     def _risk_per_unit(self) -> float:
         if self.position is None:
             return 0.0
-        return abs(self.position.entry - self.position.stop)
+        return float(self.position.metadata.get("initial_risk_per_unit") or abs(self.position.entry - self.position.stop))
 
     def _r_multiple(self, exit_price: float) -> float:
         if self.position is None:
@@ -160,6 +188,15 @@ class Simulator:
         if self.position.direction == "LONG":
             return (exit_price - self.position.entry) / risk
         return (self.position.entry - exit_price) / risk
+
+    def _total_r_multiple(self, exit_price: float) -> float:
+        if self.position is None:
+            return 0.0
+        realized = float(self.position.metadata.get("realized_r", 0.0))
+        remaining_qty = float(self.position.qty)
+        initial_qty = float(self.position.metadata.get("initial_qty") or remaining_qty or 1.0)
+        remaining_fraction = remaining_qty / initial_qty if initial_qty > 0 else 1.0
+        return realized + (self._r_multiple(exit_price) * remaining_fraction)
 
     def _exit_type(self, reason: str) -> str:
         normalized = reason.lower().strip()
@@ -202,3 +239,114 @@ class Simulator:
             "break_even_trigger_r": break_even_trigger,
             "trail_trigger_r": trail_trigger,
         }
+
+    def _maybe_partial(self, candle: Candle) -> dict[str, Any] | None:
+        if self.position is None or self.position.partial_taken:
+            return None
+        trigger_r = float(EXECUTION_CONFIG["paper_partial_r"])
+        fraction = max(0.0, min(1.0, float(EXECUTION_CONFIG["paper_partial_fraction"])))
+        risk = self._risk_per_unit()
+        if trigger_r <= 0 or fraction <= 0 or risk <= 0:
+            return None
+        position = self.position
+        hit = (
+            (candle.high - position.entry) / risk >= trigger_r
+            if position.direction == "LONG"
+            else (position.entry - candle.low) / risk >= trigger_r
+        )
+        if not hit:
+            return None
+        close_qty = round(position.qty * fraction, 8)
+        if close_qty <= 0 or close_qty >= position.qty:
+            return None
+        exit_price = position.entry + risk * trigger_r if position.direction == "LONG" else position.entry - risk * trigger_r
+        initial_qty = float(position.metadata.get("initial_qty") or position.qty)
+        realized_r = (close_qty / initial_qty) * trigger_r if initial_qty > 0 else 0.0
+        position.qty = round(position.qty - close_qty, 8)
+        position.partial_taken = True
+        position.metadata["closed_qty"] = round(float(position.metadata.get("closed_qty", 0.0)) + close_qty, 8)
+        position.metadata["realized_r"] = round(float(position.metadata.get("realized_r", 0.0)) + realized_r, 6)
+        event = {
+            "type": "PARTIAL",
+            "reason": "Replay partial take profit",
+            "price": round(exit_price, 6),
+            "qty": close_qty,
+            "r_gain": round(realized_r, 6),
+            "trigger_r": trigger_r,
+        }
+        self._append_lifecycle_event(event)
+        return event
+
+    def _maybe_break_even(self) -> dict[str, Any] | None:
+        if self.position is None or self.position.break_even_moved:
+            return None
+        if float(self.position.metadata.get("max_r", 0.0)) < float(EXECUTION_CONFIG["paper_break_even_r"]):
+            return None
+        position = self.position
+        better = (position.direction == "LONG" and position.entry > position.stop) or (
+            position.direction == "SHORT" and position.entry < position.stop
+        )
+        if not better:
+            return None
+        position.stop = round(position.entry, 8)
+        position.break_even_moved = True
+        event = {
+            "type": "MOVE_STOP",
+            "reason": "Replay stop to break-even",
+            "new_stop": round(position.stop, 6),
+        }
+        self._append_lifecycle_event(event)
+        return event
+
+    def _maybe_trail(self, last_price: float) -> dict[str, Any] | None:
+        if self.position is None:
+            return None
+        max_r = float(self.position.metadata.get("max_r", 0.0))
+        start = float(EXECUTION_CONFIG["paper_trail_start_r"])
+        giveback = float(EXECUTION_CONFIG["paper_trail_giveback_r"])
+        risk = self._risk_per_unit()
+        if max_r < start or giveback <= 0 or risk <= 0:
+            return None
+        position = self.position
+        if position.direction == "LONG":
+            new_stop = position.entry + max(0.0, max_r - giveback) * risk
+            if new_stop <= position.stop or new_stop >= last_price:
+                return None
+        else:
+            new_stop = position.entry - max(0.0, max_r - giveback) * risk
+            if new_stop >= position.stop or new_stop <= last_price:
+                return None
+        position.stop = round(new_stop, 8)
+        event = {
+            "type": "MOVE_STOP",
+            "reason": "Replay trailing stop",
+            "new_stop": round(position.stop, 6),
+        }
+        self._append_lifecycle_event(event)
+        return event
+
+    def _stop_hit(self, candle: Candle) -> bool:
+        if self.position is None:
+            return False
+        if self.position.direction == "LONG":
+            return candle.low <= self.position.stop
+        if self.position.direction == "SHORT":
+            return candle.high >= self.position.stop
+        return False
+
+    def _target_hit(self, candle: Candle) -> bool:
+        if self.position is None or self.position.metadata.get("target") is None:
+            return False
+        target = float(self.position.metadata["target"])
+        if self.position.direction == "LONG":
+            return candle.high >= target
+        if self.position.direction == "SHORT":
+            return candle.low <= target
+        return False
+
+    def _append_lifecycle_event(self, event: dict[str, Any]) -> None:
+        if self.position is None:
+            return
+        event = dict(event)
+        event["bars_held"] = int(self.position.metadata.get("bars_held", 0))
+        self.position.metadata.setdefault("lifecycle_events", []).append(event)
