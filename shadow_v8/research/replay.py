@@ -18,7 +18,7 @@ from shadow_v8.structure.vcp_engine import VcpEngine
 from shadow_v8.structure.wm_detector import WmDetector
 
 
-REPLAY_SCHEMA_VERSION = "1.5.19"
+REPLAY_SCHEMA_VERSION = "1.5.20"
 
 
 class Replay:
@@ -221,6 +221,9 @@ class Replay:
         setup_counter: Counter[str] = Counter()
         grade_counter: Counter[str] = Counter()
         risk_state_counter: Counter[str] = Counter()
+        exit_type_counter: Counter[str] = Counter()
+        exit_reason_counter: Counter[str] = Counter()
+        lifecycle_candidate_counter: Counter[str] = Counter()
 
         for skipped in skipped_setups:
             setup_counter[str(skipped.get("setup_class") or "UNKNOWN")] += 1
@@ -230,12 +233,24 @@ class Replay:
         for trade in trades:
             setup_counter[str(trade.get("setup_class") or "UNKNOWN")] += 1
             grade_counter[str(trade.get("grade") or "UNKNOWN")] += 1
+            exit_type_counter[str(trade.get("exit_type") or "UNKNOWN")] += 1
+            exit_reason_counter[str(trade.get("exit_reason") or trade.get("reason") or "UNKNOWN")] += 1
+            diagnostics = trade.get("exit_diagnostics") or {}
+            if diagnostics.get("partial_candidate"):
+                lifecycle_candidate_counter["partial_candidate"] += 1
+            if diagnostics.get("break_even_candidate"):
+                lifecycle_candidate_counter["break_even_candidate"] += 1
+            if diagnostics.get("trail_candidate"):
+                lifecycle_candidate_counter["trail_candidate"] += 1
 
         return {
             "action_counts": dict(sorted(action_counts.items())),
             "setup_breakdown": dict(sorted(setup_counter.items())),
             "grade_breakdown": dict(sorted(grade_counter.items())),
             "risk_state_breakdown": dict(sorted(risk_state_counter.items())),
+            "exit_type_breakdown": dict(sorted(exit_type_counter.items())),
+            "exit_reason_breakdown": dict(sorted(exit_reason_counter.items())),
+            "lifecycle_candidate_breakdown": dict(sorted(lifecycle_candidate_counter.items())),
         }
 
     def _build_gate_analytics(self, trades: list[dict[str, Any]], skipped_setups: list[dict[str, Any]]) -> dict[str, Any]:
