@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 from shadow_v8.config import (
@@ -26,6 +27,7 @@ from shadow_v8.data.market_data import CompositeMarketData, MarketDataProvider
 from shadow_v8.data.scanner import CryptoScanner, StockScanner
 from shadow_v8.data.stooq_market_data import StooqMarketData
 from shadow_v8.fundamentals.earnings_calendar import EarningsCalendar
+from shadow_v8.execution.execution_router import ExecutionRouter
 from shadow_v8.execution.paper_order_manager import PaperOrderManager
 from shadow_v8.fundamentals.earnings_engine import EarningsEngine
 from shadow_v8.fundamentals.growth_engine import GrowthEngine
@@ -100,6 +102,7 @@ def main() -> None:
     bybit = BybitMarketData()
     dashboard = DashboardWriter()
     paper = PaperOrderManager(account_balance=EXECUTION_CONFIG["paper_account_balance"])
+    router = _execution_router(paper)
     alerts = TelegramAlerts()
     commands = CommandProcessor()
 
@@ -112,7 +115,9 @@ def main() -> None:
             if command_result.get("commands"):
                 print(f"Telegram commands processed: {command_result['commands']}")
             entries_paused = commands.entries_paused()
-            scan_count = len(_run_scan_cycle(bybit, dashboard, paper, alerts, entries_paused=entries_paused))
+            scan_count = len(
+                _run_scan_cycle(bybit, dashboard, paper, router, alerts, entries_paused=entries_paused)
+            )
         except Exception as exc:
             errors.append(f"{type(exc).__name__}: {exc}")
             print(f"Cycle error: {errors[-1]}")
@@ -143,6 +148,7 @@ def _run_scan_cycle(
     bybit: BybitMarketData,
     dashboard: DashboardWriter,
     paper: PaperOrderManager | None = None,
+    router: ExecutionRouter | None = None,
     alerts: TelegramAlerts | None = None,
     entries_paused: bool = False,
 ) -> list[dict]:
@@ -165,7 +171,7 @@ def _run_scan_cycle(
                 alerts.paper_lifecycle(event)
         _sync_paper_positions(scan_results, paper)
         paper_candidates = _paper_entry_candidates(scan_results)
-        execution_results = [] if entries_paused else _process_paper_entries(paper_candidates, paper)
+        execution_results = [] if entries_paused else _process_paper_entries(paper_candidates, paper, router)
         for result in execution_results:
             print(f"Paper execution: {result['symbol']} ok={result['ok']} reason={result['reason']}")
             if alerts is not None:
@@ -281,6 +287,19 @@ def _live_trading_enabled() -> bool:
     return FEATURE_FLAGS["crypto_live_trading_enabled"] or FEATURE_FLAGS["stock_live_trading_enabled"]
 
 
+def _execution_router(paper: PaperOrderManager) -> ExecutionRouter:
+    return ExecutionRouter(
+        {"paper": paper},
+        mode=EXECUTION_CONFIG["mode"],
+        broker_configs=BROKERS,
+        live_trading_enabled={
+            "crypto": FEATURE_FLAGS["crypto_live_trading_enabled"],
+            "forex": FEATURE_FLAGS["crypto_live_trading_enabled"],
+            "stock": FEATURE_FLAGS["stock_live_trading_enabled"],
+        },
+    )
+
+
 def _sync_paper_positions(scan_results: list[dict], paper: PaperOrderManager) -> None:
     prices = {}
     for result in scan_results:
@@ -314,7 +333,12 @@ def _paper_entry_candidates(scan_results: list[dict]) -> list[dict]:
     return sorted(candidates, key=lambda item: item["setup"].final_score, reverse=True)
 
 
-def _process_paper_entries(scan_results: list[dict], paper: PaperOrderManager) -> list[dict]:
+def _process_paper_entries(
+    scan_results: list[dict],
+    paper: PaperOrderManager,
+    router: ExecutionRouter | None = None,
+) -> list[dict]:
+    router = router or _execution_router(paper)
     results = []
     open_count = len(paper.store.load_all())
     for result in scan_results:
@@ -326,11 +350,15 @@ def _process_paper_entries(scan_results: list[dict], paper: PaperOrderManager) -
         prepared = _prepare_paper_entry(result)
         if prepared is None:
             continue
-        execution = paper.enter(result["asset"], prepared)
+        execution = router.enter(_paper_execution_asset(result["asset"]), prepared)
         results.append(execution)
         if execution.get("ok"):
             open_count += 1
     return results
+
+
+def _paper_execution_asset(asset: AssetConfig) -> AssetConfig:
+    return replace(asset, broker="paper")
 
 
 def _prepare_paper_entry(result: dict) -> EntryDecision | None:
