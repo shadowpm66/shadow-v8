@@ -87,12 +87,19 @@ class CommandProcessor:
         top = latest.get("top") or {}
         summary = risk.get("summary") or {}
         errors = status.get("errors") or []
+        preflight = status.get("execution_preflight") or {}
+        top_blocks = preflight.get("top_block_reasons") or []
+        top_block = top_blocks[0].get("reason") if top_blocks else "none"
+        execution_state = "READY" if preflight.get("ready") else "BLOCKED" if preflight.get("checked") else "UNKNOWN"
         return (
             "Shadow v8 status\n"
             f"Health: {status.get('health', 'UNKNOWN')}\n"
             f"Mode: {status.get('mode', '-')}\n"
             f"Live trading: {'ON' if status.get('live_trading_enabled') else 'OFF'}\n"
             f"Entries paused: {'YES' if state.get('entries_paused') else 'NO'}\n"
+            f"Execution: {execution_state}\n"
+            f"Preflight: {preflight.get('passed', '-')}/{preflight.get('checked', '-')} pass\n"
+            f"Top block: {top_block}\n"
             f"Scan count: {status.get('scan_count', '-')}\n"
             f"Cycle sec: {status.get('duration_sec', '-')}\n"
             f"Open positions: {summary.get('open_positions', 0)}\n"
