@@ -320,6 +320,10 @@ def _engine_card(status: dict[str, Any]) -> str:
     scan_count = status.get("scan_count", "-")
     live = "ON" if status.get("live_trading_enabled") else "OFF"
     entries = "PAUSED" if status.get("entries_paused") else "ACTIVE"
+    preflight = status.get("execution_preflight") or {}
+    preflight_ready = "READY" if preflight.get("ready") else "BLOCKED" if preflight.get("checked") else "UNKNOWN"
+    top_blocks = preflight.get("top_block_reasons") or []
+    top_block = top_blocks[0].get("reason") if top_blocks else "-"
     return f"""
       <section class="card">
         <h2>Engine</h2>
@@ -330,6 +334,9 @@ def _engine_card(status: dict[str, Any]) -> str:
         <dl class="kv tight">
           <dt>Live trading</dt><dd>{live}</dd>
           <dt>Entries</dt><dd>{entries}</dd>
+          <dt>Execution</dt><dd>{_e(preflight_ready)}</dd>
+          <dt>Preflight</dt><dd>{_e(preflight.get("passed", "-"))}/{_e(preflight.get("checked", "-"))} pass</dd>
+          <dt>Top block</dt><dd>{_e(top_block)}</dd>
           <dt>Scan count</dt><dd>{_e(scan_count)}</dd>
           <dt>Cycle sec</dt><dd>{_e(duration)}</dd>
         </dl>
