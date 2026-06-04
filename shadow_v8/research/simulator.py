@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from shadow_v8.config import EXECUTION_CONFIG
-from shadow_v8.models import AssetConfig, Candle, EntryDecision, PositionState
+from shadow_v8.models import AssetConfig, Candle, EntryDecision, PositionState, StructureSignal
 from shadow_v8.strategy.exit_policy import ExitPolicy
 
 
@@ -73,6 +73,20 @@ class Simulator:
         if decision.action == "EXIT":
             return self.close_position(candle, decision.reason)
         return None
+
+    def apply_structure_exit(self, candle: Candle, structure: StructureSignal) -> dict[str, Any] | None:
+        if self.position is None or not self._is_opposite_structure(structure):
+            return None
+        event = {
+            "type": "EXIT_SIGNAL",
+            "reason": "Replay opposite structure exit",
+            "structure_type": structure.type,
+            "structure_direction": structure.direction,
+            "quality_score": round(float(structure.quality_score), 6),
+            "neckline": round(float(structure.neckline), 6) if structure.neckline is not None else None,
+        }
+        self._append_lifecycle_event(event)
+        return self.close_position(candle, "Replay opposite structure exit")
 
     def close_open_at_end(self, candle: Candle) -> dict[str, Any] | None:
         if self.position is None:
@@ -200,6 +214,8 @@ class Simulator:
 
     def _exit_type(self, reason: str) -> str:
         normalized = reason.lower().strip()
+        if "opposite structure" in normalized:
+            return "opposite_structure"
         if "hard stop" in normalized:
             return "hard_stop"
         if "end of replay" in normalized:
@@ -231,6 +247,7 @@ class Simulator:
             "mfe": round(float(position.metadata.get("mfe", 0.0)), 6),
             "bars_held": int(position.metadata.get("bars_held", 0)),
             "hit_hard_stop": exit_type == "hard_stop",
+            "opposite_structure_exit": exit_type == "opposite_structure",
             "closed_at_end": exit_type == "end_of_replay",
             "partial_candidate": max_r >= partial_trigger,
             "break_even_candidate": max_r >= break_even_trigger,
@@ -239,6 +256,20 @@ class Simulator:
             "break_even_trigger_r": break_even_trigger,
             "trail_trigger_r": trail_trigger,
         }
+
+    def _is_opposite_structure(self, structure: StructureSignal) -> bool:
+        if self.position is None:
+            return False
+        if float(structure.quality_score) < 50.0:
+            return False
+        metadata = structure.metadata or {}
+        if metadata.get("neckline_ok") is False:
+            return False
+        if self.position.direction == "LONG":
+            return structure.direction == "SHORT" and structure.type == "M"
+        if self.position.direction == "SHORT":
+            return structure.direction == "LONG" and structure.type == "W"
+        return False
 
     def _maybe_partial(self, candle: Candle) -> dict[str, Any] | None:
         if self.position is None or self.position.partial_taken:
