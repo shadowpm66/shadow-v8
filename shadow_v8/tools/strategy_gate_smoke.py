@@ -734,6 +734,61 @@ def check_countertrend_reclaim_calibration() -> None:
         calibrated_entry.metadata.get("countertrend_reclaim_override") is True,
         "Calibration entry should mark countertrend reclaim override",
     )
+    mixed_reference_setup = Scorer(allow_countertrend_reclaim_watch=True).score(
+        "CTR_MIXED_REFERENCE",
+        countertrend_stage,
+        base(),
+        vcp(),
+        structure(),
+        nested(),
+        pivot(),
+        context=mixed_reference_context(),
+    )
+    mixed_gate = mixed_reference_setup.metadata["trade_gate"]
+    mixed_entry = EntryPolicy(allow_countertrend_reclaim_entry=True).decide(
+        asset(), mixed_reference_setup, RiskManager().evaluate(asset(), mixed_reference_setup)
+    )
+    assert_true(
+        mixed_gate["countertrend_reclaim"]["candidate"] is False,
+        "Countertrend reclaim should not mark candidates into stronger reference obstacles",
+    )
+    assert_true(
+        mixed_gate["countertrend_reclaim"]["reason"] == "reference_obstacle_bias",
+        "Countertrend reclaim should explain reference obstacle bias",
+    )
+    assert_true(
+        mixed_gate["countertrend_reclaim"]["reference"]["obstacle_count"] == 3,
+        "Countertrend reclaim metadata should expose obstacle count",
+    )
+    assert_true(mixed_entry.action == "SKIP", "Reference-obstructed countertrend setup should skip")
+    weak_reference_context = ContextState(
+        quality_score=68.0,
+        nearest_zones=[{"name": "Daily Open"}],
+        zone_count=8,
+        regime="trend_norm",
+        metadata={
+            "reference_confluence": {
+                "favorable_count": 1,
+                "obstacle_count": 0,
+                "flags": ["at_reference_level"],
+            }
+        },
+    )
+    weak_reference_setup = Scorer(allow_countertrend_reclaim_watch=True).score(
+        "CTR_WEAK_REFERENCE",
+        countertrend_stage,
+        base(),
+        vcp(),
+        structure(),
+        nested(),
+        pivot(),
+        context=weak_reference_context,
+    )
+    weak_gate = weak_reference_setup.metadata["trade_gate"]
+    assert_true(
+        weak_gate["countertrend_reclaim"]["reason"] == "missing_strong_reference_support",
+        "Countertrend reclaim should require stacked favorable reference support",
+    )
 
 
 def main() -> None:
@@ -765,7 +820,7 @@ def main() -> None:
     print("directional_pivot_states=enabled")
     print("developing_directional_vcp=MONITOR")
     print("pivot_shift_progress=granular")
-    print("countertrend_reclaim_calibration=explicit")
+    print("countertrend_reclaim_calibration=reference_guarded")
 
 
 if __name__ == "__main__":

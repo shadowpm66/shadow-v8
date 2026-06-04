@@ -139,7 +139,7 @@ class EntryPolicy:
         pivot = setup.metadata.get("pivot_confirmation") or {}
         if not bool(pivot.get("reclaimed_or_lost")):
             return False
-        if not bool(pivot.get("retest_hold") or pivot.get("confirmed")):
+        if not bool(pivot.get("confirmed")):
             return False
         pivot_metadata = pivot.get("metadata") or {}
         shift_state = str(pivot.get("shift_progress_state") or pivot_metadata.get("shift_progress_state") or "")
