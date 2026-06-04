@@ -70,6 +70,17 @@ def check_end_of_replay_exit() -> dict:
     trade = simulator.close_open_at_end(candle("2026-05-02T00:00:00", 100.0, 106.0, 99.0, 104.0))
     assert_true(trade is not None, "End-of-replay should close the position")
     assert_true(trade["exit_type"] == "end_of_replay", "End close should classify as end_of_replay")
+    assert_true(trade["partial_taken"] is True, "End close should have taken partial profit")
+    assert_true(trade["break_even_moved"] is True, "End close should have moved stop to break-even")
+    assert_true(trade["closed_qty"] == trade["initial_qty"], "End close should close full initial quantity")
+    assert_true(
+        any(event["reason"] == "Replay partial take profit" for event in trade["lifecycle_events"]),
+        "End close should log partial event",
+    )
+    assert_true(
+        any(event["reason"] == "Replay stop to break-even" for event in trade["lifecycle_events"]),
+        "End close should log break-even event",
+    )
     assert_true(trade["exit_diagnostics"]["closed_at_end"] is True, "End close diagnostics should flag closed at end")
     assert_true(trade["exit_diagnostics"]["partial_candidate"] is True, "End close should detect partial candidate")
     assert_true(trade["exit_diagnostics"]["break_even_candidate"] is True, "End close should detect break-even candidate")
@@ -85,6 +96,10 @@ def check_trail_candidate_exit() -> dict:
     )
     simulator.on_bar(candle("2026-06-02T00:00:00", 100.0, 101.0, 84.0, 86.0))
     trade = simulator.close_position(candle("2026-06-03T00:00:00", 86.0, 89.0, 85.0, 88.0), "Unit close")
+    assert_true(
+        any(event["reason"] == "Replay trailing stop" for event in trade["lifecycle_events"]),
+        "Large favorable move should log trailing stop event",
+    )
     assert_true(trade["exit_diagnostics"]["trail_candidate"] is True, "Large favorable move should flag trail candidate")
     assert_true(trade["exit_diagnostics"]["max_r"] >= 3.0, "Trail candidate should have at least 3R max excursion")
     return trade
@@ -99,6 +114,7 @@ def main() -> None:
     print("ok=True")
     print(f"hard_stop_type={hard_stop['exit_type']}")
     print(f"end_close_type={end_close['exit_type']}")
+    print(f"end_close_events={end_close['lifecycle_events']}")
     print(f"trail_candidate={trail['exit_diagnostics']['trail_candidate']}")
     print(f"trail_max_r={trail['exit_diagnostics']['max_r']}")
 

@@ -51,7 +51,7 @@ def check_replay_fixture() -> dict:
     fixture_asset, fixture_candles, min_bars = load_fixture()
     result = Replay(asset=fixture_asset, candles=fixture_candles, min_bars=min_bars).run()
     assert_true(result["ok"] is True, "Replay fixture result should be ok=True")
-    assert_true(result["schema_version"] == "1.5.20", "Replay result should include schema_version")
+    assert_true(result["schema_version"] == "1.5.21", "Replay result should include schema_version")
     assert_true("metrics" in result, "Replay result should include metrics")
     assert_true("breakdowns" in result, "Replay result should include breakdowns")
     assert_true("gate_analytics" in result, "Replay result should include gate analytics")
@@ -63,6 +63,10 @@ def check_replay_fixture() -> dict:
     assert_true(
         "lifecycle_candidate_breakdown" in result["breakdowns"],
         "Replay result should include lifecycle candidate breakdown",
+    )
+    assert_true(
+        "lifecycle_event_breakdown" in result["breakdowns"],
+        "Replay result should include lifecycle event breakdown",
     )
     assert_true("confirmation" in result["skipped_setups"][0], "Skipped setups should include confirmation fields")
     assert_true("base" in result["skipped_setups"][0]["confirmation"], "Confirmation should include base fields")
@@ -146,11 +150,19 @@ def check_long_simulator() -> dict:
     opened = candle("2026-02-01T00:00:00", 100.0, 101.0, 99.0, 100.0)
     simulator.open_position(unit_asset, entry_decision("LONGUNIT", "LONG", entry=100.0, stop=95.0), opened)
     simulator.on_bar(candle("2026-02-02T00:00:00", 100.0, 106.0, 98.0, 104.0))
-    trade = simulator.close_position(candle("2026-02-03T00:00:00", 104.0, 116.0, 103.0, 110.0), "Unit close")
-    assert_true(trade["r_multiple"] == 2.0, "LONG R-multiple should be 2.0")
+    simulator.on_bar(candle("2026-02-03T00:00:00", 104.0, 116.0, 103.0, 116.0))
+    trade = simulator.close_position(candle("2026-02-04T00:00:00", 116.0, 116.0, 110.0, 110.0), "Unit close")
+    assert_true(trade["r_multiple"] == 1.6, "LONG blended R-multiple should be 1.6 after partial")
     assert_true("mae" in trade and "mfe" in trade, "LONG trade should include MAE/MFE")
     assert_true(trade["exit_type"] == "policy_exit", "LONG trade should include policy exit type")
     assert_true("exit_diagnostics" in trade, "LONG trade should include exit diagnostics")
+    assert_true(trade["partial_taken"] is True, "LONG trade should take partial profit")
+    assert_true(trade["break_even_moved"] is True, "LONG trade should move stop to break-even")
+    assert_true(any(event["type"] == "PARTIAL" for event in trade["lifecycle_events"]), "LONG trade should log partial event")
+    assert_true(
+        any(event["reason"] == "Replay trailing stop" for event in trade["lifecycle_events"]),
+        "LONG trade should log trailing stop event",
+    )
     assert_true(trade["exit_diagnostics"]["partial_candidate"] is True, "LONG trade should flag partial candidate")
     assert_true(trade["exit_diagnostics"]["break_even_candidate"] is True, "LONG trade should flag break-even candidate")
     assert_true(trade["exit_diagnostics"]["trail_candidate"] is True, "LONG trade should flag trail candidate")
@@ -164,10 +176,11 @@ def check_short_simulator() -> dict:
     simulator.open_position(unit_asset, entry_decision("SHORTUNIT", "SHORT", entry=100.0, stop=105.0), opened)
     simulator.on_bar(candle("2026-03-02T00:00:00", 100.0, 102.0, 94.0, 96.0))
     trade = simulator.close_position(candle("2026-03-03T00:00:00", 96.0, 97.0, 89.0, 90.0), "Unit close")
-    assert_true(trade["r_multiple"] == 2.0, "SHORT R-multiple should be 2.0")
+    assert_true(trade["r_multiple"] == 1.6, "SHORT blended R-multiple should be 1.6 after partial")
     assert_true("mae" in trade and "mfe" in trade, "SHORT trade should include MAE/MFE")
     assert_true(trade["exit_type"] == "policy_exit", "SHORT trade should include policy exit type")
     assert_true("exit_diagnostics" in trade, "SHORT trade should include exit diagnostics")
+    assert_true(trade["partial_taken"] is True, "SHORT trade should take partial profit")
     assert_true(trade["exit_diagnostics"]["partial_candidate"] is True, "SHORT trade should flag partial candidate")
     return trade
 
