@@ -90,6 +90,7 @@ class DashboardWriter:
         live_trading_enabled: bool,
         entries_paused: bool = False,
         execution_preflight: dict[str, Any] | None = None,
+        execution_readiness: dict[str, Any] | None = None,
         errors: list[str] | None = None,
     ) -> None:
         self._write_json(
@@ -104,6 +105,7 @@ class DashboardWriter:
                 "live_trading_enabled": live_trading_enabled,
                 "entries_paused": entries_paused,
                 "execution_preflight": execution_preflight or {},
+                "execution_readiness": execution_readiness or {},
                 "health": "OK" if not errors else "WARN",
                 "errors": errors or [],
             },
