@@ -18,7 +18,7 @@ from shadow_v8.structure.vcp_engine import VcpEngine
 from shadow_v8.structure.wm_detector import WmDetector
 
 
-REPLAY_SCHEMA_VERSION = "1.5.21"
+REPLAY_SCHEMA_VERSION = "1.5.22"
 
 
 class Replay:
@@ -70,6 +70,9 @@ class Replay:
             visible = self.candles[: idx + 1]
             stage = self.stage_engine.evaluate(visible, visible)
             structure = self.wm_detector.detect(visible)
+            structure_exit = self.simulator.apply_structure_exit(candle, structure)
+            if structure_exit is not None:
+                continue
             context = self.context_engine.evaluate(visible, structure.direction)
             base = self.base_engine.evaluate(visible, structure.direction)
             vcp = self.vcp_engine.evaluate(
