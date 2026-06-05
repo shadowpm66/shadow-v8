@@ -57,7 +57,7 @@ def main() -> None:
     live_blockers = blocker_names(live_report)
     assert_true(live_report["ready"] is False, "Live Bybit should remain blocked until adapter is wired")
     assert_true("executor_missing" in live_blockers, "Missing live executor should be reported")
-    assert_true("adapter_placeholder" in live_blockers, "Placeholder adapter should be reported")
+    assert_true("adapter_validate_only" in live_blockers, "Validate-only adapter should be reported")
     assert_true("credentials_missing" not in live_blockers, "Present credentials should not be reported missing")
     assert_true("fake-key-value" not in str(live_report), "Readiness report must not echo API key values")
     assert_true("fake-secret-value" not in str(live_report), "Readiness report must not echo API secret values")
