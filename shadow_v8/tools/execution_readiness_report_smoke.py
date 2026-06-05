@@ -21,10 +21,10 @@ def main() -> None:
 
     live_report = build_execution_readiness_report(mode="live_guarded", env=fake_env)
     live_text = json.dumps(live_report, sort_keys=True)
-    assert_true(live_report["ready"] is False, "Live report should remain blocked while adapters are placeholders")
+    assert_true(live_report["ready"] is False, "Live report should remain blocked while Bybit is validate-only")
     assert_true("fake-key-value" not in live_text, "Readiness report must not echo API key values")
     assert_true("fake-secret-value" not in live_text, "Readiness report must not echo API secret values")
-    assert_true(any("adapter_placeholder" == item["reason"] for item in live_report["top_blockers"]), "Placeholder adapter should be reported")
+    assert_true(any("adapter_validate_only" == item["reason"] for item in live_report["top_blockers"]), "Validate-only adapter should be reported")
 
     compact = "\n".join(compact_lines(live_report))
     assert_true("Shadow v8 execution readiness" in compact, "Compact report should include title")

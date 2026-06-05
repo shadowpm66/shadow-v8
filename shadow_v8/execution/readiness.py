@@ -18,7 +18,7 @@ BROKER_CREDENTIAL_ENV = {
 }
 
 BROKER_ADAPTER_STATUS = {
-    "bybit": "placeholder",
+    "bybit": "validate_only",
     "ibkr": "placeholder",
     "paper": "connected",
 }
@@ -113,8 +113,8 @@ def _broker_report(
             blockers.append("credentials_missing")
         if not executor_present:
             blockers.append("executor_missing")
-        if adapter_status == "placeholder":
-            blockers.append("adapter_placeholder")
+        if adapter_status in ("placeholder", "validate_only"):
+            blockers.append(f"adapter_{adapter_status}")
         if asset_classes and not any(live_flags.values()):
             blockers.append("live_flag_disabled")
     if broker_name == "paper" and mode_label == "paper" and not executor_present:
