@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import os
+import time
 from dataclasses import dataclass
+from hashlib import sha256
+from hmac import new as hmac_new
+from urllib.parse import urlencode
 from typing import Any, Mapping
 
 from shadow_v8.config import BROKERS
@@ -15,6 +19,12 @@ def _to_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _redacted(value: str | None) -> str:
+    if not value:
+        return ""
+    return f"{value[:3]}...{value[-3:]}" if len(value) > 6 else "***"
 
 
 @dataclass(frozen=True)
@@ -73,6 +83,7 @@ class BybitOrderManager:
     def __init__(self, env: Mapping[str, str] | None = None) -> None:
         self.broker = BROKERS["bybit"]
         self.env = env or os.environ
+        self.recv_window = "5000"
 
     def validate_config(self) -> dict:
         credential_keys = ("BYBIT_API_KEY", "BYBIT_API_SECRET")
@@ -95,6 +106,52 @@ class BybitOrderManager:
             "credentials_present": not missing_credentials,
             "missing_credentials": missing_credentials,
             "live_orders_enabled": False,
+            "blockers": blockers,
+        }
+
+    def signed_request_preview(
+        self,
+        *,
+        method: str,
+        path: str,
+        params: Mapping[str, Any] | None = None,
+        body: str = "",
+        timestamp_ms: int | None = None,
+    ) -> dict:
+        api_key = str(self.env.get("BYBIT_API_KEY", "") or "").strip()
+        api_secret = str(self.env.get("BYBIT_API_SECRET", "") or "").strip()
+        timestamp_ms = timestamp_ms or int(time.time() * 1000)
+        method_label = method.upper().strip()
+        params = params or {}
+        blockers = []
+        if not api_key or not api_secret:
+            blockers.append("credentials_missing")
+        if method_label not in {"GET", "POST"}:
+            blockers.append("unsupported_method")
+        if not path.startswith("/"):
+            blockers.append("path_missing_leading_slash")
+        query = urlencode(sorted((key, str(value)) for key, value in params.items())) if params else ""
+        payload = query if method_label == "GET" else body
+        sign_payload = f"{timestamp_ms}{api_key}{self.recv_window}{payload}"
+        signature = hmac_new(api_secret.encode("utf-8"), sign_payload.encode("utf-8"), sha256).hexdigest() if api_secret else ""
+        headers = {
+            "X-BAPI-API-KEY": _redacted(api_key),
+            "X-BAPI-SIGN": _redacted(signature),
+            "X-BAPI-TIMESTAMP": str(timestamp_ms),
+            "X-BAPI-RECV-WINDOW": self.recv_window,
+        }
+        return {
+            "ok": not blockers,
+            "mode": "validate_only",
+            "method": method_label,
+            "path": path,
+            "query": query,
+            "body_present": bool(body),
+            "timestamp_ms": timestamp_ms,
+            "recv_window": int(self.recv_window),
+            "signature_present": bool(signature),
+            "signature_length": len(signature),
+            "headers_preview": headers,
             "blockers": blockers,
         }
 
@@ -123,15 +180,29 @@ class BybitOrderManager:
             "blockers": blockers,
         }
 
-    def preflight_report(self, asset: AssetConfig, instrument_payload: Mapping[str, Any] | None = None) -> dict:
+    def preflight_report(
+        self,
+        asset: AssetConfig,
+        instrument_payload: Mapping[str, Any] | None = None,
+        *,
+        include_signed_preview: bool = False,
+    ) -> dict:
         config = self.validate_config()
         instrument = None
+        signed_preview = None
         blockers = list(config["blockers"])
         if instrument_payload is None:
             blockers.append("instrument_payload_missing")
         else:
             instrument = self.validate_instrument(asset, instrument_payload)
             blockers.extend(f"instrument:{blocker}" for blocker in instrument["blockers"])
+        if include_signed_preview:
+            signed_preview = self.signed_request_preview(
+                method="GET",
+                path="/v5/order/realtime",
+                params={"category": "linear", "symbol": asset.symbol},
+            )
+            blockers.extend(f"signed:{blocker}" for blocker in signed_preview["blockers"])
         return {
             "ok": False,
             "mode": "validate_only",
@@ -140,6 +211,7 @@ class BybitOrderManager:
             "asset_class": asset.asset_class,
             "config": config,
             "instrument": instrument,
+            "signed_preview": signed_preview,
             "live_orders_enabled": False,
             "blockers": sorted(set(blockers)),
         }

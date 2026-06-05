@@ -62,6 +62,28 @@ def main() -> None:
     assert_true("live_orders_disabled_validate_only" in preflight["blockers"], "Preflight should include validate-only blocker")
     assert_true(preflight["instrument"]["ok"] is True, "Valid fake instrument should be present in preflight")
 
+    signed_manager = BybitOrderManager(env=env_with_creds)
+    signed_preview = signed_manager.signed_request_preview(
+        method="GET",
+        path="/v5/order/realtime",
+        params={"category": "linear", "symbol": "ETHUSDT"},
+        timestamp_ms=1_717_000_000_000,
+    )
+    signed_text = str(signed_preview)
+    assert_true(signed_preview["ok"] is True, "Signed preview should pass shape validation with fake credentials")
+    assert_true(signed_preview["signature_length"] == 64, "Bybit HMAC signature should be 64 hex chars")
+    assert_true("fake-key-value" not in signed_text, "Signed preview must not echo fake API key")
+    assert_true("fake-secret-value" not in signed_text, "Signed preview must not echo fake API secret")
+
+    signed_preflight = signed_manager.preflight_report(
+        crypto_asset(),
+        sample_instrument(),
+        include_signed_preview=True,
+    )
+    assert_true(signed_preflight["signed_preview"]["ok"] is True, "Preflight should include signed preview status")
+    assert_true("fake-key-value" not in str(signed_preflight), "Preflight must not echo fake API key")
+    assert_true("fake-secret-value" not in str(signed_preflight), "Preflight must not echo fake API secret")
+
     entry_result = manager.enter(
         crypto_asset(),
         EntryDecision(action="ENTER", symbol="ETHUSDT", direction="LONG", reason="smoke"),
