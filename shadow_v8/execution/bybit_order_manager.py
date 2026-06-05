@@ -123,6 +123,27 @@ class BybitOrderManager:
             "blockers": blockers,
         }
 
+    def preflight_report(self, asset: AssetConfig, instrument_payload: Mapping[str, Any] | None = None) -> dict:
+        config = self.validate_config()
+        instrument = None
+        blockers = list(config["blockers"])
+        if instrument_payload is None:
+            blockers.append("instrument_payload_missing")
+        else:
+            instrument = self.validate_instrument(asset, instrument_payload)
+            blockers.extend(f"instrument:{blocker}" for blocker in instrument["blockers"])
+        return {
+            "ok": False,
+            "mode": "validate_only",
+            "broker": "bybit",
+            "symbol": asset.symbol,
+            "asset_class": asset.asset_class,
+            "config": config,
+            "instrument": instrument,
+            "live_orders_enabled": False,
+            "blockers": sorted(set(blockers)),
+        }
+
     def enter(self, asset: AssetConfig, decision: EntryDecision) -> dict:
         return {
             "ok": False,
