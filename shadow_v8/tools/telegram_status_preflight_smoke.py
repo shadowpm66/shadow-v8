@@ -63,6 +63,11 @@ def main() -> None:
                 "blocked": 2,
                 "top_block_reasons": [{"reason": "Execution mode scan_only blocks orders", "count": 2}],
             },
+            "execution_readiness": {
+                "ready": False,
+                "brokers_checked": 2,
+                "top_blockers": [{"reason": "adapter_placeholder", "count": 1}],
+            },
             "errors": [],
         },
     )
@@ -73,6 +78,8 @@ def main() -> None:
     assert_true("Execution: BLOCKED" in text, "Telegram status should report blocked preflight state")
     assert_true("Preflight: 0/2 pass" in text, "Telegram status should report preflight pass count")
     assert_true("Top block: Execution mode scan_only blocks orders" in text, "Telegram status should report top block reason")
+    assert_true("Readiness: BLOCKED" in text, "Telegram status should report blocked readiness state")
+    assert_true("Ready block: adapter_placeholder" in text, "Telegram status should report readiness blocker")
 
     print("Telegram status preflight smoke complete")
     print("ok=True")
