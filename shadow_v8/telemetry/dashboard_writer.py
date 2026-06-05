@@ -139,6 +139,7 @@ class DashboardWriter:
         fundamentals = result.get("fundamentals")
         earnings = result.get("earnings")
         reference_confluence = (context.metadata or {}).get("reference_confluence", {}) if context else {}
+        execution_preview = self._execution_preview(entry)
         return {
             "rank": rank,
             "symbol": setup.symbol,
@@ -184,6 +185,7 @@ class DashboardWriter:
             "gate_status": trade_gate.get("status"),
             "gate_blockers": trade_gate.get("blockers", []),
             "gate_warnings": trade_gate.get("warnings", []),
+            **execution_preview,
             "reasons": setup.reasons,
         }
 
@@ -199,6 +201,7 @@ class DashboardWriter:
         reference_confluence = (context.metadata or {}).get("reference_confluence", {}) if context else {}
         fundamentals = result.get("fundamentals")
         earnings = result.get("earnings")
+        execution_preview = self._execution_preview(entry)
         return {
             "timestamp": timestamp,
             "symbol": setup.symbol,
@@ -219,6 +222,53 @@ class DashboardWriter:
             "context_score": round(context.quality_score, 2) if context else None,
             "nearest_reference": (reference_confluence.get("nearest_reference") or {}).get("name"),
             "reference_flags": reference_confluence.get("flags", []),
+            **execution_preview,
+        }
+
+    def _execution_preview(self, entry: Any) -> dict[str, Any]:
+        preview = (getattr(entry, "metadata", {}) or {}).get("execution_preview") or {}
+        router_preflight = preview.get("router_preflight") or {}
+        entry_result = preview.get("entry_result") or {}
+        payload = preview.get("payload") or entry_result.get("payload") or {}
+        signed_preview = preview.get("signed_preview") or entry_result.get("signed_preview") or {}
+        blockers = preview.get("blockers") or entry_result.get("blockers") or router_preflight.get("blockers") or []
+        payload_ok = preview.get("payload_ok")
+        if payload_ok is None:
+            payload_ok = entry_result.get("payload_ok")
+        safety_block = preview.get("safety_block")
+        if safety_block is None:
+            safety_block = entry_result.get("safety_block") if entry_result else router_preflight.get("safety_block")
+
+        if not preview:
+            return {
+                "execution_preview_status": None,
+                "execution_payload_ok": None,
+                "execution_safety_block": None,
+                "execution_live_enabled": None,
+                "execution_blockers": [],
+                "execution_qty": None,
+                "execution_side": None,
+                "execution_signed_ok": None,
+            }
+
+        if safety_block:
+            status = "BLOCKED"
+        elif payload_ok:
+            status = "PAYLOAD_READY"
+        elif router_preflight.get("ok"):
+            status = "PREFLIGHT_READY"
+        else:
+            status = "PREVIEW"
+
+        return {
+            "execution_preview_status": status,
+            "execution_payload_ok": payload_ok,
+            "execution_safety_block": bool(safety_block),
+            "execution_live_enabled": bool(preview.get("live_orders_enabled") or entry_result.get("live_orders_enabled")),
+            "execution_blockers": list(blockers)[:5],
+            "execution_qty": payload.get("qty"),
+            "execution_side": payload.get("side"),
+            "execution_signed_ok": signed_preview.get("ok"),
         }
 
     def _position_rows(self) -> list[dict[str, Any]]:
