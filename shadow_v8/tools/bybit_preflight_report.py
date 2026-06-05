@@ -33,11 +33,17 @@ def compact_lines(report: dict) -> list[str]:
         f"Qty step: {rules.get('qty_step', '-')}",
         f"Min order qty: {rules.get('min_order_qty', '-')}",
         f"Min notional: {rules.get('min_notional_value', '-')}",
+        f"Signed preview ok: {(report.get('signed_preview') or {}).get('ok')}",
         "Blockers: " + (", ".join(str(item) for item in blockers) if blockers else "none"),
     ]
 
 
-def build_bybit_preflight_report(*, symbol: str, fetch_public_instrument: bool = False) -> dict:
+def build_bybit_preflight_report(
+    *,
+    symbol: str,
+    fetch_public_instrument: bool = False,
+    include_signed_preview: bool = False,
+) -> dict:
     asset = _asset_for_symbol(symbol)
     instrument_payload = None
     fetch_error = None
@@ -46,7 +52,11 @@ def build_bybit_preflight_report(*, symbol: str, fetch_public_instrument: bool =
             instrument_payload = BybitMarketData().get_linear_instrument(asset.symbol)
         except Exception as exc:  # noqa: BLE001 - tool reports public-data failure without secrets.
             fetch_error = type(exc).__name__
-    report = BybitOrderManager().preflight_report(asset, instrument_payload)
+    report = BybitOrderManager().preflight_report(
+        asset,
+        instrument_payload,
+        include_signed_preview=include_signed_preview,
+    )
     if fetch_error:
         report["blockers"] = sorted(set([*report["blockers"], "public_instrument_fetch_failed"]))
         report["public_fetch_error"] = fetch_error
@@ -57,12 +67,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Print a sanitized Bybit validation-only preflight report.")
     parser.add_argument("--symbol", default="ETHUSDT")
     parser.add_argument("--fetch-public-instrument", action="store_true")
+    parser.add_argument("--signed-preview", action="store_true")
     parser.add_argument("--compact", action="store_true")
     args = parser.parse_args()
 
     report = build_bybit_preflight_report(
         symbol=args.symbol,
         fetch_public_instrument=args.fetch_public_instrument,
+        include_signed_preview=args.signed_preview,
     )
     if args.compact:
         print("\n".join(compact_lines(report)))
