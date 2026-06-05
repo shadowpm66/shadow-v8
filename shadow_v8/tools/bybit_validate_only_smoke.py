@@ -56,6 +56,12 @@ def main() -> None:
     assert_true("instrument_not_trading" in blocked_instrument["blockers"], "Trading status blocker should be reported")
     assert_true("quote_not_usdt" in blocked_instrument["blockers"], "Quote blocker should be reported")
 
+    preflight = manager.preflight_report(crypto_asset(), sample_instrument())
+    assert_true(preflight["ok"] is False, "Validate-only preflight should not mark live orders ok")
+    assert_true(preflight["live_orders_enabled"] is False, "Preflight should keep live orders disabled")
+    assert_true("live_orders_disabled_validate_only" in preflight["blockers"], "Preflight should include validate-only blocker")
+    assert_true(preflight["instrument"]["ok"] is True, "Valid fake instrument should be present in preflight")
+
     entry_result = manager.enter(
         crypto_asset(),
         EntryDecision(action="ENTER", symbol="ETHUSDT", direction="LONG", reason="smoke"),

@@ -3,11 +3,15 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-import requests
-
 from shadow_v8.config import BROKERS
 from shadow_v8.data.market_data import MarketDataProvider
 from shadow_v8.models import AssetConfig, Candle, MarketDataBundle
+
+
+def _requests():
+    import requests
+
+    return requests
 
 
 class BybitMarketData(MarketDataProvider):
@@ -22,7 +26,7 @@ class BybitMarketData(MarketDataProvider):
             "interval": interval,
             "limit": limit,
         }
-        response = requests.get(url, params=params, timeout=10)
+        response = _requests().get(url, params=params, timeout=10)
         response.raise_for_status()
         payload = response.json()
         if payload.get("retCode") != 0:
@@ -45,7 +49,7 @@ class BybitMarketData(MarketDataProvider):
     def _last_price(self, symbol: str) -> float | None:
         url = f"{self.base_url}/v5/market/tickers"
         params = {"category": "linear", "symbol": symbol}
-        response = requests.get(url, params=params, timeout=5)
+        response = _requests().get(url, params=params, timeout=5)
         response.raise_for_status()
         rows = response.json().get("result", {}).get("list", []) or []
         return float(rows[0]["lastPrice"]) if rows else None
@@ -58,7 +62,7 @@ class BybitMarketData(MarketDataProvider):
             params: dict[str, Any] = {"category": "linear", "status": "Trading", "limit": 1000}
             if cursor:
                 params["cursor"] = cursor
-            response = requests.get(url, params=params, timeout=10)
+            response = _requests().get(url, params=params, timeout=10)
             response.raise_for_status()
             payload = response.json()
             if payload.get("retCode") != 0:
@@ -76,6 +80,17 @@ class BybitMarketData(MarketDataProvider):
             if not cursor:
                 break
         return symbols[:max_symbols] if max_symbols else symbols
+
+    def get_linear_instrument(self, symbol: str) -> dict[str, Any] | None:
+        url = f"{self.base_url}/v5/market/instruments-info"
+        params = {"category": "linear", "symbol": symbol.upper()}
+        response = _requests().get(url, params=params, timeout=10)
+        response.raise_for_status()
+        payload = response.json()
+        if payload.get("retCode") != 0:
+            return None
+        rows = payload.get("result", {}).get("list", []) or []
+        return rows[0] if rows else None
 
     def load(self, asset: AssetConfig) -> MarketDataBundle:
         timeframes = {"D", "W", asset.primary_timeframe, asset.confirmation_timeframe, *asset.intraday_timeframes}
