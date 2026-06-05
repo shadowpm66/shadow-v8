@@ -3,13 +3,15 @@ from __future__ import annotations
 import os
 import time
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation, ROUND_DOWN
 from hashlib import sha256
 from hmac import new as hmac_new
-from urllib.parse import urlencode
 from typing import Any, Mapping
+from urllib.parse import urlencode
 
 from shadow_v8.config import BROKERS
 from shadow_v8.models import AssetConfig, EntryDecision, ExitDecision
+from shadow_v8.strategy.position_sizer import size_by_risk
 
 
 def _to_float(value: Any) -> float | None:
@@ -19,6 +21,17 @@ def _to_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _round_down(value: float, step: float | None) -> float:
+    if step is None or step <= 0:
+        return float(value)
+    try:
+        decimal_value = Decimal(str(value))
+        decimal_step = Decimal(str(step))
+        return float((decimal_value / decimal_step).to_integral_value(rounding=ROUND_DOWN) * decimal_step)
+    except (InvalidOperation, ValueError, ZeroDivisionError):
+        return float(value)
 
 
 def _redacted(value: str | None) -> str:
@@ -178,6 +191,78 @@ class BybitOrderManager:
             "symbol": asset.symbol,
             "rules": rules.as_dict(),
             "blockers": blockers,
+        }
+
+    def build_entry_intent_preview(
+        self,
+        asset: AssetConfig,
+        decision: EntryDecision,
+        instrument_payload: Mapping[str, Any],
+        *,
+        account_balance: float = 10_000.0,
+    ) -> dict:
+        rules = BybitInstrumentRules.from_payload(instrument_payload)
+        instrument_check = self.validate_instrument(asset, instrument_payload)
+        blockers = [f"instrument:{blocker}" for blocker in instrument_check["blockers"]]
+        if decision.action != "ENTER":
+            blockers.append("entry_action_not_enter")
+        if decision.entry is None:
+            blockers.append("entry_missing")
+        if decision.stop is None:
+            blockers.append("stop_missing")
+        side = "Buy" if decision.direction == "LONG" else "Sell" if decision.direction == "SHORT" else ""
+        if not side:
+            blockers.append("direction_not_supported")
+
+        entry = float(decision.entry or 0.0)
+        stop = float(decision.stop or 0.0)
+        if entry <= 0:
+            blockers.append("entry_invalid")
+        if stop <= 0:
+            blockers.append("stop_invalid")
+        if decision.direction == "LONG" and stop >= entry:
+            blockers.append("invalid_long_stop_side")
+        if decision.direction == "SHORT" and stop <= entry:
+            blockers.append("invalid_short_stop_side")
+
+        risk_pct = float(decision.metadata.get("risk_pct") or asset.max_risk_pct or 0.0)
+        raw_qty = _to_float(decision.metadata.get("qty"))
+        sizing_model = "provided_qty" if raw_qty is not None else "risk_pct"
+        if raw_qty is None:
+            raw_qty = size_by_risk(float(account_balance), risk_pct, entry, stop) if entry > 0 and stop > 0 else 0.0
+        rounded_qty = _round_down(raw_qty, rules.qty_step)
+        rounded_entry = _round_down(entry, rules.tick_size)
+        rounded_stop = _round_down(stop, rules.tick_size)
+        notional = rounded_qty * rounded_entry
+
+        if rounded_qty <= 0:
+            blockers.append("qty_zero_after_rounding")
+        if rules.min_order_qty is not None and rounded_qty < rules.min_order_qty:
+            blockers.append("qty_below_min_order_qty")
+        if rules.max_order_qty is not None and rounded_qty > rules.max_order_qty:
+            blockers.append("qty_above_max_order_qty")
+        if rules.min_notional_value is not None and notional < rules.min_notional_value:
+            blockers.append("notional_below_min")
+
+        return {
+            "ok": not blockers,
+            "mode": "validate_only",
+            "symbol": asset.symbol,
+            "side": side,
+            "order_type": "Market",
+            "time_in_force": "GTC",
+            "reduce_only": False,
+            "sizing_model": sizing_model,
+            "risk_pct": round(risk_pct, 6),
+            "account_balance": round(float(account_balance), 2),
+            "raw_qty": round(float(raw_qty or 0.0), 8),
+            "qty": round(float(rounded_qty), 8),
+            "entry": round(float(rounded_entry), 8),
+            "stop": round(float(rounded_stop), 8),
+            "notional": round(float(notional), 4),
+            "rules": rules.as_dict(),
+            "blockers": sorted(set(blockers)),
+            "live_orders_enabled": False,
         }
 
     def preflight_report(
