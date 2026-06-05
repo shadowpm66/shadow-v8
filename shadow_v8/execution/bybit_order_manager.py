@@ -366,11 +366,30 @@ class BybitOrderManager:
         }
 
     def enter(self, asset: AssetConfig, decision: EntryDecision) -> dict:
+        instrument_payload = decision.metadata.get("instrument_payload")
+        account_balance = float(decision.metadata.get("account_balance") or 10_000.0)
+        if isinstance(instrument_payload, Mapping):
+            preview = self.build_entry_order_payload_preview(
+                asset,
+                decision,
+                instrument_payload,
+                account_balance=account_balance,
+            )
+            return {
+                **preview,
+                "reason": "Bybit adapter is validate-only; live order placement is disabled",
+                "action": decision.action,
+                "safety_block": True,
+            }
         return {
             "ok": False,
             "reason": "Bybit adapter is validate-only; live order placement is disabled",
             "symbol": asset.symbol,
             "action": decision.action,
+            "mode": "validate_only",
+            "blockers": ["instrument_payload_missing", "live_orders_disabled_validate_only"],
+            "live_orders_enabled": False,
+            "safety_block": True,
         }
 
     def apply_exit(self, asset: AssetConfig, decision: ExitDecision) -> dict:
