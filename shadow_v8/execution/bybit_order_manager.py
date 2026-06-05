@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import time
 from dataclasses import dataclass
@@ -32,6 +33,11 @@ def _round_down(value: float, step: float | None) -> float:
         return float((decimal_value / decimal_step).to_integral_value(rounding=ROUND_DOWN) * decimal_step)
     except (InvalidOperation, ValueError, ZeroDivisionError):
         return float(value)
+
+
+def _decimal_string(value: float) -> str:
+    text = format(Decimal(str(value)).normalize(), "f")
+    return text.rstrip("0").rstrip(".") if "." in text else text
 
 
 def _redacted(value: str | None) -> str:
@@ -261,6 +267,64 @@ class BybitOrderManager:
             "stop": round(float(rounded_stop), 8),
             "notional": round(float(notional), 4),
             "rules": rules.as_dict(),
+            "blockers": sorted(set(blockers)),
+            "live_orders_enabled": False,
+        }
+
+    def build_entry_order_payload_preview(
+        self,
+        asset: AssetConfig,
+        decision: EntryDecision,
+        instrument_payload: Mapping[str, Any],
+        *,
+        account_balance: float = 10_000.0,
+        include_signed_preview: bool = True,
+    ) -> dict:
+        intent = self.build_entry_intent_preview(
+            asset,
+            decision,
+            instrument_payload,
+            account_balance=account_balance,
+        )
+        blockers = [f"intent:{blocker}" for blocker in intent["blockers"]]
+        payload = {
+            "category": "linear",
+            "symbol": asset.symbol.upper(),
+            "side": intent["side"],
+            "orderType": intent["order_type"],
+            "qty": _decimal_string(intent["qty"]),
+            "timeInForce": intent["time_in_force"],
+            "reduceOnly": False,
+        }
+        if intent["stop"] > 0:
+            payload["stopLoss"] = _decimal_string(intent["stop"])
+            payload["slTriggerBy"] = "LastPrice"
+            payload["tpslMode"] = "Full"
+
+        if not intent["ok"]:
+            blockers.append("intent_not_ready")
+        blockers.append("live_orders_disabled_validate_only")
+        body = json.dumps(payload, separators=(",", ":"), sort_keys=True)
+        signed_preview = None
+        if include_signed_preview:
+            signed_preview = self.signed_request_preview(
+                method="POST",
+                path="/v5/order/create",
+                body=body,
+            )
+            blockers.extend(f"signed:{blocker}" for blocker in signed_preview["blockers"])
+
+        return {
+            "ok": False,
+            "payload_ok": intent["ok"],
+            "mode": "validate_only",
+            "symbol": asset.symbol,
+            "endpoint": "/v5/order/create",
+            "method": "POST",
+            "intent": intent,
+            "payload": payload,
+            "body": body,
+            "signed_preview": signed_preview,
             "blockers": sorted(set(blockers)),
             "live_orders_enabled": False,
         }
