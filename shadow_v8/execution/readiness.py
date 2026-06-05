@@ -36,7 +36,7 @@ def execution_readiness_report(
     env = env or os.environ
     executors = executors or {}
     mode_label = mode.lower().strip()
-    broker_names = sorted({asset.broker for asset in assets} | set(broker_configs) | {"paper"})
+    broker_names = sorted({asset.broker for asset in assets} | {"paper"})
     broker_reports = [
         _broker_report(
             broker_name,
