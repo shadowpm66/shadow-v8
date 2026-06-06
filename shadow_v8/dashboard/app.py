@@ -154,6 +154,7 @@ def _render_dashboard(
               <th>Fund</th>
               <th>Earnings</th>
               <th>Risk</th>
+              <th>Exec</th>
               <th>Reason</th>
             </tr>
           </thead>
@@ -209,11 +210,12 @@ def _render_dashboard(
                 <th>Fund</th>
                 <th>Earnings</th>
                 <th>Risk</th>
+                <th>Exec</th>
                 <th>Reason</th>
               </tr>
             </thead>
             <tbody>
-              {''.join(_decision_row(row) for row in decision_rows[:12]) or _empty_row(9, "No decisions logged yet.")}
+              {''.join(_decision_row(row) for row in decision_rows[:12]) or _empty_row(10, "No decisions logged yet.")}
             </tbody>
           </table>
         </div>
@@ -421,6 +423,7 @@ def _scanner_row(row: dict[str, Any]) -> str:
         <td>{_e(row.get("fundamental_grade"))}</td>
         <td>{_e(_earnings_text(row))}</td>
         <td>{_e(row.get("risk_state"))}</td>
+        <td>{_e(_execution_preview_text(row))}</td>
         <td class="reason">{_e(reason)}</td>
       </tr>
     """
@@ -475,6 +478,7 @@ def _decision_row(row: dict[str, Any]) -> str:
         <td>{_e(row.get("fundamental_grade"))}</td>
         <td>{_e(_earnings_text(row))}</td>
         <td>{_e(row.get("risk_state"))}</td>
+        <td>{_e(_execution_preview_text(row))}</td>
         <td class="reason">{_e(row.get("reason"))}</td>
       </tr>
     """
@@ -556,6 +560,28 @@ def _gate_text(row: dict[str, Any]) -> str:
     if warnings:
         return f"{status}: {', '.join(str(item) for item in warnings[:2])}"
     return str(status)
+
+
+def _execution_preview_text(row: dict[str, Any]) -> str:
+    status = row.get("execution_preview_status")
+    if not status:
+        return "-"
+    parts = [str(status)]
+    side = row.get("execution_side")
+    qty = row.get("execution_qty")
+    if side:
+        parts.append(str(side))
+    if qty not in (None, ""):
+        parts.append(f"qty={qty}")
+    blockers = row.get("execution_blockers") or []
+    if blockers:
+        parts.append(f"block={blockers[0]}")
+    elif row.get("execution_payload_ok") is True:
+        parts.append("payload_ok")
+    signed_ok = row.get("execution_signed_ok")
+    if signed_ok is not None:
+        parts.append(f"signed={signed_ok}")
+    return " | ".join(parts)
 
 
 def _risk_flags(row: dict[str, Any]) -> str:
