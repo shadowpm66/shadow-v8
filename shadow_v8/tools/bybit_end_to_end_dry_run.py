@@ -18,6 +18,7 @@ from shadow_v8.models import (
     StructureSignal,
     VcpState,
 )
+from shadow_v8.data.bybit_market_data import BybitMarketData
 from shadow_v8.tools.bybit_order_intent_smoke import sample_instrument
 from shadow_v8.tools.bybit_router_preview_report import build_bybit_router_preview_report
 
@@ -153,10 +154,22 @@ def build_bybit_end_to_end_dry_run(
     account_balance: float = 10_000.0,
     qty: float | None = None,
     instrument_payload: Mapping | None = None,
+    fetch_public_instrument: bool = False,
+    base_url: str | None = None,
     env: Mapping[str, str] | None = None,
 ) -> dict:
     symbol = symbol.upper()
     direction = direction.upper()
+    public_fetch_error: str | None = None
+    public_instrument_missing = False
+    instrument_source = "provided" if instrument_payload is not None else "sample"
+    if instrument_payload is None and fetch_public_instrument:
+        instrument_source = "public"
+        try:
+            instrument_payload = BybitMarketData(base_url=base_url).get_linear_instrument(symbol)
+            public_instrument_missing = instrument_payload is None
+        except Exception as exc:  # pragma: no cover - smoke covers through fake provider
+            public_fetch_error = f"{type(exc).__name__}: {exc}"
     instrument_payload = instrument_payload or sample_instrument()
     asset = _asset(symbol)
     setup = _setup(symbol, direction)
@@ -174,6 +187,11 @@ def build_bybit_end_to_end_dry_run(
         instrument_payload=instrument_payload,
         env=env,
     )
+    blockers = set(router_report.get("blockers") or [])
+    if fetch_public_instrument and public_fetch_error:
+        blockers.add("public_instrument_fetch_failed")
+    elif fetch_public_instrument and public_instrument_missing:
+        blockers.add("public_instrument_missing")
     scanner_snapshot = _scanner_snapshot(
         asset=asset,
         setup=setup,
@@ -190,6 +208,8 @@ def build_bybit_end_to_end_dry_run(
         "mode": "dry_run_validate_only",
         "symbol": symbol,
         "direction": direction,
+        "instrument_source": instrument_source,
+        "public_fetch_error": public_fetch_error,
         "strategy_gate": gate,
         "strategy_entry": {
             "action": entry_decision.action,
@@ -204,7 +224,7 @@ def build_bybit_end_to_end_dry_run(
         "dashboard_execution_preview": scanner_snapshot["entry"].metadata["execution_preview"],
         "live_orders_enabled": False,
         "safety_block": True,
-        "blockers": sorted(set(router_report.get("blockers") or [])),
+        "blockers": sorted(blockers),
     }
 
 
@@ -219,6 +239,8 @@ def compact_lines(report: dict) -> list[str]:
         "Shadow v8 Bybit end-to-end dry run",
         f"Symbol: {report.get('symbol', '-')}",
         f"Direction: {report.get('direction', '-')}",
+        f"Instrument source: {report.get('instrument_source', '-')}",
+        f"Public fetch error: {report.get('public_fetch_error') or 'none'}",
         f"Strategy gate: {gate.get('status', '-')}",
         f"Entry action: {strategy.get('action', '-')}",
         f"Setup: {strategy.get('setup_class', '-')} {strategy.get('grade', '-')}",
@@ -243,6 +265,8 @@ def main() -> None:
     parser.add_argument("--risk-pct", type=float, default=0.01)
     parser.add_argument("--account-balance", type=float, default=10_000.0)
     parser.add_argument("--qty", type=float)
+    parser.add_argument("--fetch-public-instrument", action="store_true")
+    parser.add_argument("--base-url")
     parser.add_argument("--compact", action="store_true")
     args = parser.parse_args()
 
@@ -254,6 +278,8 @@ def main() -> None:
         risk_pct=args.risk_pct,
         account_balance=args.account_balance,
         qty=args.qty,
+        fetch_public_instrument=args.fetch_public_instrument,
+        base_url=args.base_url,
     )
     if args.compact:
         print("\n".join(compact_lines(report)))
