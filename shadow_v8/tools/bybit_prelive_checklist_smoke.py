@@ -58,6 +58,36 @@ def main() -> None:
         assert_true("Status: VALIDATE_ONLY_READY" in compact, "Compact report should show status")
         assert_true("Live orders enabled: False" in compact, "Compact report should show live-order safety")
 
+        with_private_probe = checklist.build_bybit_prelive_checklist(
+            symbols="ETHUSDT,BTCUSDT",
+            direction="LONG",
+            fetch_public_instrument=False,
+            include_private_validation=True,
+            env=FAKE_ENV,
+        )
+        with_private_text = json.dumps(with_private_probe, sort_keys=True)
+        private_validation = with_private_probe["private_validation"]
+        assert_true(
+            with_private_probe["status"] == "VALIDATE_ONLY_READY",
+            "Signed private preview should keep checklist validate-only ready",
+        )
+        assert_true(
+            private_validation["status"] == "SIGNED_PREVIEW_READY",
+            "Included private validation should produce a signed preview",
+        )
+        assert_true(
+            private_validation["request_attempted"] is False,
+            "Checklist private probe should not call private Bybit endpoints by default",
+        )
+        assert_true("fake-key-value" not in with_private_text, "Checklist private probe must not echo raw API keys")
+        assert_true("fake-secret-value" not in with_private_text, "Checklist private probe must not echo raw API secrets")
+
+        private_compact = "\n".join(checklist.compact_lines(with_private_probe))
+        assert_true(
+            "Private validation status: SIGNED_PREVIEW_READY" in private_compact,
+            "Compact checklist should surface private validation status",
+        )
+
         missing_credentials = checklist.build_bybit_prelive_checklist(
             symbols="ETHUSDT,BTCUSDT",
             direction="LONG",

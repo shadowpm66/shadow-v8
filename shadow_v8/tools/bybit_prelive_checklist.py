@@ -13,6 +13,7 @@ from shadow_v8.tools.bybit_public_dry_run_batch import (
     offline_sample_instrument,
     parse_symbols,
 )
+from shadow_v8.tools.bybit_private_validation_probe import build_bybit_private_validation_probe
 from shadow_v8.tools.execution_readiness_report import build_execution_readiness_report
 
 
@@ -69,6 +70,8 @@ def _next_actions(status: str, blockers: Mapping[str, int]) -> list[str]:
         actions.append("verify_bybit_credentials_on_ec2")
     if status == "VALIDATE_ONLY_READY":
         actions.append("run_private_signed_validation_before_live_unlock")
+    if "private_validation_request_failed" in blockers or "private_validation_ret_code_nonzero" in blockers:
+        actions.append("inspect_private_validation_probe")
     actions.append("do_not_enable_live_orders_yet")
     return actions
 
@@ -82,6 +85,8 @@ def build_bybit_prelive_checklist(
     fetch_public_instrument: bool = True,
     base_url: str | None = None,
     include_signed_preview: bool = True,
+    include_private_validation: bool = False,
+    execute_private_validation: bool = False,
     env: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     parsed_symbols = parse_symbols(symbols)
@@ -116,6 +121,13 @@ def build_bybit_prelive_checklist(
         base_url=base_url,
         env=env,
     )
+    private_validation = None
+    if include_private_validation:
+        private_validation = build_bybit_private_validation_probe(
+            execute_private_request=execute_private_validation,
+            base_url=base_url,
+            env=env,
+        )
 
     batch_summary = batch.get("summary") or {}
     payload_validate_ready = bool(batch.get("ready_for_validate_only")) and not public_blockers
@@ -137,12 +149,18 @@ def build_bybit_prelive_checklist(
         preflight.get("blockers") or [],
         batch_summary.get("blocker_counts") or {},
         public_blockers,
+        (private_validation or {}).get("blockers") or [],
     )
     status = "UNSAFE_LIVE_ENABLED" if live_orders_enabled else _status(
         payload_validate_ready=payload_validate_ready,
         credential_ready=credential_ready,
         public_blockers=public_blockers,
     )
+    private_status = (private_validation or {}).get("status")
+    if private_status == "PRIVATE_VALIDATION_BLOCKED":
+        status = "BLOCKED"
+    elif private_status == "CREDENTIALS_PENDING":
+        status = "CREDENTIALS_PENDING"
     return {
         "ok": status == "VALIDATE_ONLY_READY",
         "mode": "bybit_prelive_checklist_validate_only",
@@ -152,6 +170,8 @@ def build_bybit_prelive_checklist(
         "direction": direction.upper(),
         "fetch_public_instrument": fetch_public_instrument,
         "include_signed_preview": include_signed_preview,
+        "include_private_validation": include_private_validation,
+        "execute_private_validation": execute_private_validation,
         "payload_validate_ready": payload_validate_ready,
         "credential_ready": credential_ready,
         "live_orders_enabled": live_orders_enabled,
@@ -161,6 +181,7 @@ def build_bybit_prelive_checklist(
         "execution_readiness": execution,
         "bybit_preflight": preflight,
         "public_dry_run_batch": batch,
+        "private_validation": private_validation,
     }
 
 
@@ -170,6 +191,7 @@ def compact_lines(report: Mapping[str, Any]) -> list[str]:
     config = preflight.get("config") or {}
     instrument = preflight.get("instrument") or {}
     signed_preview = preflight.get("signed_preview") or {}
+    private_validation = report.get("private_validation") or {}
     lines = [
         "Shadow v8 Bybit pre-live checklist",
         f"Status: {report.get('status', '-')}",
@@ -184,6 +206,9 @@ def compact_lines(report: Mapping[str, Any]) -> list[str]:
     ]
     if report.get("include_signed_preview"):
         lines.append(f"Signed preview ok: {signed_preview.get('ok')}")
+    if report.get("include_private_validation"):
+        lines.append(f"Private validation status: {private_validation.get('status', '-')}")
+        lines.append(f"Private request attempted: {private_validation.get('request_attempted', '-')}")
     blockers = report.get("blocker_counts") or {}
     if blockers:
         lines.append("Top blockers:")
@@ -204,6 +229,12 @@ def main() -> None:
     parser.add_argument("--base-url")
     parser.add_argument("--offline-sample", action="store_true", help="Use bundled sample instruments instead of public lookup")
     parser.add_argument("--no-signed-preview", action="store_true")
+    parser.add_argument("--include-private-validation", action="store_true")
+    parser.add_argument(
+        "--execute-private-validation",
+        action="store_true",
+        help="Make a read-only signed Bybit account request. Never places orders.",
+    )
     parser.add_argument("--compact", action="store_true")
     args = parser.parse_args()
 
@@ -215,6 +246,8 @@ def main() -> None:
         fetch_public_instrument=not args.offline_sample,
         base_url=args.base_url,
         include_signed_preview=not args.no_signed_preview,
+        include_private_validation=args.include_private_validation or args.execute_private_validation,
+        execute_private_validation=args.execute_private_validation,
     )
     if args.compact:
         print("\n".join(compact_lines(report)))
