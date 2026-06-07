@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from collections import Counter
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 from shadow_v8.data.bybit_market_data import BybitMarketData
 from shadow_v8.execution.bybit_order_manager import BybitOrderManager
@@ -87,6 +87,8 @@ def build_bybit_prelive_checklist(
     include_signed_preview: bool = True,
     include_private_validation: bool = False,
     execute_private_validation: bool = False,
+    private_http_get: Callable[..., Any] | None = None,
+    private_timestamp_ms: int | None = None,
     env: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     parsed_symbols = parse_symbols(symbols)
@@ -127,6 +129,8 @@ def build_bybit_prelive_checklist(
             execute_private_request=execute_private_validation,
             base_url=base_url,
             env=env,
+            http_get=private_http_get,
+            timestamp_ms=private_timestamp_ms,
         )
 
     batch_summary = batch.get("summary") or {}
