@@ -207,6 +207,14 @@ For the read-only private validation step, run:
 python -m shadow_v8.tools.ec2_prelive_validation_audit --symbols ETHUSDT,BTCUSDT --execute-private-validation --compact
 ```
 
+After private validation succeeds and after `DASHBOARD_TOKEN` has been rotated,
+run the final manual live-unlock review. This still does not place orders and
+does not set the live-unlock environment variable:
+
+```bash
+python -m shadow_v8.tools.bybit_live_unlock_review --symbols ETHUSDT,BTCUSDT --execute-private-validation --dashboard-token-rotated --compact
+```
+
 Keep `SHADOW_LIVE_UNLOCK_BROKERS` empty until the final live-review step.
 Rotate `DASHBOARD_TOKEN` before live trading because an earlier dashboard token
 was exposed during setup discussion.
