@@ -30,11 +30,13 @@ def execution_readiness_report(
     broker_configs: Mapping[str, BrokerConfig],
     mode: str,
     live_trading_enabled: Mapping[str, bool],
+    live_order_unlocked: Mapping[str, bool] | None = None,
     executors: Mapping[str, object] | None = None,
     env: EnvReader | None = None,
 ) -> dict:
     env = env or os.environ
     executors = executors or {}
+    live_order_unlocked = live_order_unlocked or {}
     mode_label = mode.lower().strip()
     broker_names = sorted({asset.broker for asset in assets} | {"paper"})
     broker_reports = [
@@ -43,6 +45,7 @@ def execution_readiness_report(
             broker_configs.get(broker_name),
             mode_label=mode_label,
             live_trading_enabled=live_trading_enabled,
+            live_order_unlocked=live_order_unlocked,
             asset_classes={asset.asset_class for asset in assets if asset.broker == broker_name},
             executor_present=broker_name in executors,
             env=env,
@@ -50,7 +53,7 @@ def execution_readiness_report(
         for broker_name in broker_names
     ]
     asset_routes = [
-        _asset_route_report(asset, mode_label, live_trading_enabled, broker_configs, broker_reports)
+        _asset_route_report(asset, mode_label, live_trading_enabled, live_order_unlocked, broker_configs, broker_reports)
         for asset in assets
     ]
     blockers = Counter(
@@ -88,6 +91,7 @@ def _broker_report(
     *,
     mode_label: str,
     live_trading_enabled: Mapping[str, bool],
+    live_order_unlocked: Mapping[str, bool],
     asset_classes: set[str],
     executor_present: bool,
     env: EnvReader,
@@ -99,6 +103,7 @@ def _broker_report(
     enabled = bool(broker.enabled) if broker else False
     paper = bool(broker.paper) if broker else False
     live_flags = {asset_class: bool(live_trading_enabled.get(asset_class, False)) for asset_class in sorted(asset_classes)}
+    live_unlock_passed = bool(live_order_unlocked.get(broker_name, False))
 
     if broker is None:
         blockers.append("broker_config_missing")
@@ -117,6 +122,8 @@ def _broker_report(
             blockers.append(f"adapter_{adapter_status}")
         if asset_classes and not any(live_flags.values()):
             blockers.append("live_flag_disabled")
+        if not live_unlock_passed:
+            blockers.append("live_unlock_missing")
     if broker_name == "paper" and mode_label == "paper" and not executor_present:
         blockers.append("executor_missing")
 
@@ -129,6 +136,7 @@ def _broker_report(
         "credentials_present": not missing_credentials,
         "missing_credentials": missing_credentials,
         "live_flags": live_flags,
+        "live_unlock_passed": live_unlock_passed,
         "ready": not blockers,
         "blockers": blockers,
     }
@@ -138,6 +146,7 @@ def _asset_route_report(
     asset: AssetConfig,
     mode_label: str,
     live_trading_enabled: Mapping[str, bool],
+    live_order_unlocked: Mapping[str, bool],
     broker_configs: Mapping[str, BrokerConfig],
     broker_reports: list[dict],
 ) -> dict:
@@ -156,6 +165,8 @@ def _asset_route_report(
             blockers.append("broker_configured_as_paper")
         if not live_trading_enabled.get(asset.asset_class, False):
             blockers.append("live_flag_disabled")
+        if not live_order_unlocked.get(asset.broker, False):
+            blockers.append("live_unlock_missing")
     if broker_report.get("blockers"):
         blockers.extend(f"broker:{blocker}" for blocker in broker_report["blockers"])
     return {
@@ -163,6 +174,7 @@ def _asset_route_report(
         "asset_class": asset.asset_class,
         "broker": asset.broker,
         "live_flag_enabled": bool(live_trading_enabled.get(asset.asset_class, False)),
+        "live_unlock_passed": bool(live_order_unlocked.get(asset.broker, False)),
         "ready": not blockers,
         "blockers": sorted(set(blockers)),
     }

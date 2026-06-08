@@ -52,6 +52,7 @@ def main() -> None:
         mode="live_guarded",
         broker_configs={"bybit": BrokerConfig(name="bybit", enabled=True, paper=False)},
         live_trading_enabled={"crypto": True},
+        live_order_unlocked={"bybit": True},
     )
     passed = pass_router.preflight(asset("LIVEOK", "bybit"), direction="LONG")
     assert_true(passed["ok"] is True, "Preflight should pass when every live guard passes")

@@ -58,6 +58,7 @@ def main() -> None:
         mode="live_guarded",
         broker_configs={"bybit": BrokerConfig(name="bybit", enabled=True, paper=False, base_url="https://api.bybit.com")},
         live_trading_enabled={"crypto": True},
+        live_order_unlocked={"bybit": True},
     )
     routed = router.enter(crypto_asset(), entry_with_rules())
     assert_true(routed["ok"] is False, "Router should surface validate-only Bybit enter block")

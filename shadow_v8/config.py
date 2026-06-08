@@ -152,6 +152,11 @@ ENGINE_CONFIG = {
 
 EXECUTION_CONFIG = {
     "mode": os.getenv("SHADOW_EXECUTION_MODE", "scan_only").lower(),
+    "live_unlock_brokers": tuple(
+        broker.strip().lower()
+        for broker in os.getenv("SHADOW_LIVE_UNLOCK_BROKERS", "").split(",")
+        if broker.strip()
+    ),
     "paper_account_balance": float(os.getenv("PAPER_ACCOUNT_BALANCE", "10000")),
     "paper_take_profit_r": float(os.getenv("PAPER_TAKE_PROFIT_R", "2.0")),
     "paper_partial_r": float(os.getenv("PAPER_PARTIAL_R", "1.0")),

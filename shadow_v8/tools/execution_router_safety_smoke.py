@@ -78,6 +78,7 @@ def main() -> None:
         mode="live_guarded",
         broker_configs={"bybit": BrokerConfig(name="bybit", enabled=True, paper=False)},
         live_trading_enabled={"crypto": True},
+        live_order_unlocked={"bybit": True},
     )
     live_result = live_router.enter(asset("LIVE", "bybit"), entry("LIVE"))
     assert_true(live_result["ok"] is True, "live guarded should route when every guard passes")
