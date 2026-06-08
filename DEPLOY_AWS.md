@@ -198,12 +198,14 @@ validate-only audit. This does not place orders and does not print secrets:
 cd ~/shadow-v8
 git pull --ff-only
 set -a && source .env && set +a
+python -m shadow_v8.tools.ec2_prelive_sequence_report --symbols ETHUSDT,BTCUSDT --compact
 python -m shadow_v8.tools.ec2_prelive_validation_audit --symbols ETHUSDT,BTCUSDT --compact
 ```
 
 For the read-only private validation step, run:
 
 ```bash
+python -m shadow_v8.tools.ec2_prelive_sequence_report --symbols ETHUSDT,BTCUSDT --execute-private-validation --compact
 python -m shadow_v8.tools.ec2_prelive_validation_audit --symbols ETHUSDT,BTCUSDT --execute-private-validation --compact
 ```
 
@@ -212,6 +214,7 @@ run the final manual live-unlock review. This still does not place orders and
 does not set the live-unlock environment variable:
 
 ```bash
+python -m shadow_v8.tools.ec2_prelive_sequence_report --symbols ETHUSDT,BTCUSDT --execute-private-validation --dashboard-token-rotated --compact
 python -m shadow_v8.tools.bybit_live_unlock_review --symbols ETHUSDT,BTCUSDT --execute-private-validation --dashboard-token-rotated --compact
 ```
 
