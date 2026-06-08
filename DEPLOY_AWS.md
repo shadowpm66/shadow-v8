@@ -188,3 +188,25 @@ Then later:
 IBKR paper trading
 IBKR live trading
 ```
+
+## 8. Bybit Pre-Live Validation Audit
+
+Before any Bybit live unlock, pull the latest GitHub `main` on EC2 and run the
+validate-only audit. This does not place orders and does not print secrets:
+
+```bash
+cd ~/shadow-v8
+git pull --ff-only
+set -a && source .env && set +a
+python -m shadow_v8.tools.ec2_prelive_validation_audit --symbols ETHUSDT,BTCUSDT --compact
+```
+
+For the read-only private validation step, run:
+
+```bash
+python -m shadow_v8.tools.ec2_prelive_validation_audit --symbols ETHUSDT,BTCUSDT --execute-private-validation --compact
+```
+
+Keep `SHADOW_LIVE_UNLOCK_BROKERS` empty until the final live-review step.
+Rotate `DASHBOARD_TOKEN` before live trading because an earlier dashboard token
+was exposed during setup discussion.
