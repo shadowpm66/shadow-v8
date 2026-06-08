@@ -57,6 +57,7 @@ from shadow_v8.telemetry.commands import CommandProcessor
 from shadow_v8.telemetry.dashboard_writer import DashboardWriter
 from shadow_v8.telemetry.telegram_alerts import TelegramAlerts
 from shadow_v8.telemetry.research_logger import ResearchLogger
+from shadow_v8.tools.bybit_private_validation_runbook import build_bybit_private_validation_runbook
 
 
 def _demo_candles(count: int = 120, start: float = 100.0) -> list[Candle]:
@@ -136,6 +137,7 @@ def main() -> None:
             entries_paused=commands.entries_paused(),
             execution_preflight=_execution_preflight_status(router),
             execution_readiness=_execution_readiness_status(router),
+            bybit_private_validation=_bybit_private_validation_status(),
             errors=errors,
         )
         alerts.engine_warning(errors)
@@ -360,6 +362,40 @@ def _execution_readiness_status(router: ExecutionRouter | None = None) -> dict:
         },
         executors=router.executors,
     )
+
+
+def _bybit_private_validation_status() -> dict:
+    symbols = [asset.symbol for asset in enabled_assets() if asset.broker == "bybit"][:6] or ["ETHUSDT"]
+    try:
+        report = build_bybit_private_validation_runbook(
+            symbols=symbols,
+            execute_private_validation=False,
+            fetch_public_instrument=False,
+        )
+    except Exception as exc:
+        return {
+            "status": "STATUS_ERROR",
+            "private_validation_status": "UNKNOWN",
+            "credentials_present": False,
+            "live_orders_enabled": False,
+            "top_blocker": f"{type(exc).__name__}: {exc}",
+            "next_action": "inspect_private_validation_status_error",
+            "symbols": symbols,
+        }
+
+    blockers = [str(item) for item in report.get("blockers") or []]
+    next_actions = [str(item) for item in report.get("next_actions") or []]
+    return {
+        "status": report.get("status"),
+        "private_validation_status": report.get("private_validation_status"),
+        "prelive_checklist_status": report.get("prelive_checklist_status"),
+        "credentials_present": bool(report.get("credentials_present")),
+        "request_attempted": bool(report.get("request_attempted")),
+        "live_orders_enabled": bool(report.get("live_orders_enabled")),
+        "symbols": list(report.get("symbols") or symbols),
+        "top_blocker": blockers[0] if blockers else "none",
+        "next_action": next_actions[0] if next_actions else "none",
+    }
 
 
 def _sync_paper_positions(scan_results: list[dict], paper: PaperOrderManager) -> None:

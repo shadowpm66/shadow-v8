@@ -91,6 +91,7 @@ class DashboardWriter:
         entries_paused: bool = False,
         execution_preflight: dict[str, Any] | None = None,
         execution_readiness: dict[str, Any] | None = None,
+        bybit_private_validation: dict[str, Any] | None = None,
         errors: list[str] | None = None,
     ) -> None:
         self._write_json(
@@ -106,6 +107,7 @@ class DashboardWriter:
                 "entries_paused": entries_paused,
                 "execution_preflight": execution_preflight or {},
                 "execution_readiness": execution_readiness or {},
+                "bybit_private_validation": bybit_private_validation or {},
                 "health": "OK" if not errors else "WARN",
                 "errors": errors or [],
             },

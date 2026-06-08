@@ -330,6 +330,9 @@ def _engine_card(status: dict[str, Any]) -> str:
     readiness_state = "READY" if readiness.get("ready") else "BLOCKED" if readiness.get("brokers_checked") else "UNKNOWN"
     readiness_blocks = readiness.get("top_blockers") or []
     readiness_block = readiness_blocks[0].get("reason") if readiness_blocks else "-"
+    bybit_private = status.get("bybit_private_validation") or {}
+    bybit_private_status = bybit_private.get("status") or "-"
+    bybit_private_next = bybit_private.get("next_action") or bybit_private.get("top_blocker") or "-"
     return f"""
       <section class="card">
         <h2>Engine</h2>
@@ -345,6 +348,8 @@ def _engine_card(status: dict[str, Any]) -> str:
           <dt>Top block</dt><dd>{_e(top_block)}</dd>
           <dt>Readiness</dt><dd>{_e(readiness_state)}</dd>
           <dt>Ready block</dt><dd>{_e(readiness_block)}</dd>
+          <dt>Bybit private</dt><dd>{_e(bybit_private_status)}</dd>
+          <dt>Private next</dt><dd>{_e(bybit_private_next)}</dd>
           <dt>Scan count</dt><dd>{_e(scan_count)}</dd>
           <dt>Cycle sec</dt><dd>{_e(duration)}</dd>
         </dl>
