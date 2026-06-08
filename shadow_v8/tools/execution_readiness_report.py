@@ -22,6 +22,7 @@ def build_execution_readiness_report(
         assets = [replace(asset, broker="paper") for asset in assets]
     if executors is None:
         executors = {"paper": object()} if mode_label == "paper" else {}
+    live_unlock_brokers = set(EXECUTION_CONFIG.get("live_unlock_brokers", ()))
     return execution_readiness_report(
         assets=assets,
         broker_configs=BROKERS,
@@ -31,6 +32,7 @@ def build_execution_readiness_report(
             "forex": FEATURE_FLAGS["crypto_live_trading_enabled"],
             "stock": FEATURE_FLAGS["stock_live_trading_enabled"],
         },
+        live_order_unlocked={name: name in live_unlock_brokers for name in BROKERS},
         executors=executors,
         env=env,
     )
@@ -60,7 +62,8 @@ def compact_lines(report: dict) -> list[str]:
             missing_text = ",".join(str(item) for item in missing) if missing else "none"
             lines.append(
                 f"- {broker.get('broker')}: {broker_state}; adapter={broker.get('adapter_status')}; "
-                f"executor={broker.get('executor_present')}; missing_env={missing_text}"
+                f"executor={broker.get('executor_present')}; "
+                f"live_unlock={broker.get('live_unlock_passed')}; missing_env={missing_text}"
             )
     return lines
 

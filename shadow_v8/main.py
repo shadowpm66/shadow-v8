@@ -293,6 +293,11 @@ def _live_trading_enabled() -> bool:
     return FEATURE_FLAGS["crypto_live_trading_enabled"] or FEATURE_FLAGS["stock_live_trading_enabled"]
 
 
+def _live_order_unlocked() -> dict[str, bool]:
+    unlocked = set(EXECUTION_CONFIG.get("live_unlock_brokers", ()))
+    return {name: name in unlocked for name in BROKERS}
+
+
 def _execution_router(paper: PaperOrderManager) -> ExecutionRouter:
     return ExecutionRouter(
         {"paper": paper},
@@ -303,6 +308,7 @@ def _execution_router(paper: PaperOrderManager) -> ExecutionRouter:
             "forex": FEATURE_FLAGS["crypto_live_trading_enabled"],
             "stock": FEATURE_FLAGS["stock_live_trading_enabled"],
         },
+        live_order_unlocked=_live_order_unlocked(),
     )
 
 
@@ -360,6 +366,7 @@ def _execution_readiness_status(router: ExecutionRouter | None = None) -> dict:
             "forex": FEATURE_FLAGS["crypto_live_trading_enabled"],
             "stock": FEATURE_FLAGS["stock_live_trading_enabled"],
         },
+        live_order_unlocked=_live_order_unlocked(),
         executors=router.executors,
     )
 

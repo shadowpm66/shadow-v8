@@ -19,11 +19,13 @@ class ExecutionRouter:
         mode: str = "scan_only",
         broker_configs: dict[str, BrokerConfig] | None = None,
         live_trading_enabled: dict[str, bool] | None = None,
+        live_order_unlocked: dict[str, bool] | None = None,
     ) -> None:
         self.executors = executors
         self.mode = mode.lower().strip()
         self.broker_configs = broker_configs or {}
         self.live_trading_enabled = live_trading_enabled or {}
+        self.live_order_unlocked = live_order_unlocked or {}
 
     def enter(self, asset: AssetConfig, decision: EntryDecision) -> dict:
         guard = self._guard(asset, "enter", decision.direction)
@@ -62,6 +64,7 @@ class ExecutionRouter:
             "reason": "Execution preflight passed",
             "safety_block": False,
             "executor_present": True,
+            "live_unlock_passed": self._live_unlock_passed(asset.broker),
         }
 
     def _guard(self, asset: AssetConfig, action: str, direction: str | None = None) -> dict | None:
@@ -93,7 +96,12 @@ class ExecutionRouter:
             return self._blocked(asset, action, f"Broker {asset.broker} is configured as paper")
         if not self.live_trading_enabled.get(asset.asset_class, False):
             return self._blocked(asset, action, f"Live trading disabled for {asset.asset_class}")
+        if not self._live_unlock_passed(asset.broker):
+            return self._blocked(asset, action, f"Live unlock guard not passed for {asset.broker}")
         return None
+
+    def _live_unlock_passed(self, broker: str) -> bool:
+        return bool(self.live_order_unlocked.get(broker, False))
 
     def _blocked(self, asset: AssetConfig, action: str, reason: str) -> dict:
         return {

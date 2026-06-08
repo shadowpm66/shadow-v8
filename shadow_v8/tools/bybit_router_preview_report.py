@@ -76,6 +76,7 @@ def build_bybit_router_preview_report(
         mode="live_guarded",
         broker_configs={"bybit": _broker_config()},
         live_trading_enabled={"crypto": True},
+        live_order_unlocked={"bybit": True},
     )
     decision = _entry_decision(
         symbol=asset.symbol,
