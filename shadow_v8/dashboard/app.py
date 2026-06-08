@@ -333,6 +333,9 @@ def _engine_card(status: dict[str, Any]) -> str:
     bybit_private = status.get("bybit_private_validation") or {}
     bybit_private_status = bybit_private.get("status") or "-"
     bybit_private_next = bybit_private.get("next_action") or bybit_private.get("top_blocker") or "-"
+    bybit_live = status.get("bybit_live_unlock_review") or {}
+    bybit_live_status = bybit_live.get("status") or "-"
+    bybit_live_next = bybit_live.get("next_action") or bybit_live.get("top_blocker") or "-"
     return f"""
       <section class="card">
         <h2>Engine</h2>
@@ -350,6 +353,8 @@ def _engine_card(status: dict[str, Any]) -> str:
           <dt>Ready block</dt><dd>{_e(readiness_block)}</dd>
           <dt>Bybit private</dt><dd>{_e(bybit_private_status)}</dd>
           <dt>Private next</dt><dd>{_e(bybit_private_next)}</dd>
+          <dt>Live review</dt><dd>{_e(bybit_live_status)}</dd>
+          <dt>Live next</dt><dd>{_e(bybit_live_next)}</dd>
           <dt>Scan count</dt><dd>{_e(scan_count)}</dd>
           <dt>Cycle sec</dt><dd>{_e(duration)}</dd>
         </dl>

@@ -57,6 +57,7 @@ from shadow_v8.telemetry.commands import CommandProcessor
 from shadow_v8.telemetry.dashboard_writer import DashboardWriter
 from shadow_v8.telemetry.telegram_alerts import TelegramAlerts
 from shadow_v8.telemetry.research_logger import ResearchLogger
+from shadow_v8.tools.bybit_live_unlock_review import build_bybit_live_unlock_review
 from shadow_v8.tools.bybit_private_validation_runbook import build_bybit_private_validation_runbook
 
 
@@ -138,6 +139,7 @@ def main() -> None:
             execution_preflight=_execution_preflight_status(router),
             execution_readiness=_execution_readiness_status(router),
             bybit_private_validation=_bybit_private_validation_status(),
+            bybit_live_unlock_review=_bybit_live_unlock_review_status(),
             errors=errors,
         )
         alerts.engine_warning(errors)
@@ -398,6 +400,46 @@ def _bybit_private_validation_status() -> dict:
         "prelive_checklist_status": report.get("prelive_checklist_status"),
         "credentials_present": bool(report.get("credentials_present")),
         "request_attempted": bool(report.get("request_attempted")),
+        "live_orders_enabled": bool(report.get("live_orders_enabled")),
+        "symbols": list(report.get("symbols") or symbols),
+        "top_blocker": blockers[0] if blockers else "none",
+        "next_action": next_actions[0] if next_actions else "none",
+    }
+
+
+def _bybit_live_unlock_review_status() -> dict:
+    symbols = [asset.symbol for asset in enabled_assets() if asset.broker == "bybit"][:6] or ["ETHUSDT"]
+    try:
+        report = build_bybit_live_unlock_review(
+            symbols=symbols,
+            execute_private_validation=False,
+            fetch_public_instrument=False,
+        )
+    except Exception as exc:
+        return {
+            "status": "STATUS_ERROR",
+            "audit_status": "UNKNOWN",
+            "private_validation_status": "UNKNOWN",
+            "prelive_checklist_status": "UNKNOWN",
+            "dashboard_token_rotated": False,
+            "private_validation_complete": False,
+            "manual_live_unlock_required": True,
+            "live_orders_enabled": False,
+            "top_blocker": f"{type(exc).__name__}: {exc}",
+            "next_action": "inspect_live_unlock_review_status_error",
+            "symbols": symbols,
+        }
+
+    blockers = [str(item) for item in report.get("blockers") or []]
+    next_actions = [str(item) for item in report.get("next_actions") or []]
+    return {
+        "status": report.get("status"),
+        "audit_status": report.get("audit_status"),
+        "private_validation_status": report.get("private_validation_status"),
+        "prelive_checklist_status": report.get("prelive_checklist_status"),
+        "dashboard_token_rotated": bool(report.get("dashboard_token_rotated")),
+        "private_validation_complete": bool(report.get("private_validation_complete")),
+        "manual_live_unlock_required": bool(report.get("manual_live_unlock_required")),
         "live_orders_enabled": bool(report.get("live_orders_enabled")),
         "symbols": list(report.get("symbols") or symbols),
         "top_blocker": blockers[0] if blockers else "none",
