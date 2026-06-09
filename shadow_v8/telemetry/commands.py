@@ -92,6 +92,7 @@ class CommandProcessor:
         bybit_private = status.get("bybit_private_validation") or {}
         bybit_live = status.get("bybit_live_unlock_review") or {}
         ec2_rehearsal = status.get("ec2_prelive_rehearsal") or {}
+        operator_packet = status.get("bybit_prelive_operator_packet") or {}
         top_blocks = preflight.get("top_block_reasons") or []
         top_block = top_blocks[0].get("reason") if top_blocks else "none"
         readiness_blocks = readiness.get("top_blockers") or []
@@ -99,6 +100,7 @@ class CommandProcessor:
         private_next = bybit_private.get("next_action") or bybit_private.get("top_blocker") or "none"
         live_review_next = bybit_live.get("next_action") or bybit_live.get("top_blocker") or "none"
         rehearsal_next = ec2_rehearsal.get("next_action") or ec2_rehearsal.get("top_blocker") or "none"
+        operator_packet_next = operator_packet.get("next_action") or operator_packet.get("top_blocker") or "none"
         execution_state = "READY" if preflight.get("ready") else "BLOCKED" if preflight.get("checked") else "UNKNOWN"
         readiness_state = "READY" if readiness.get("ready") else "BLOCKED" if readiness.get("brokers_checked") else "UNKNOWN"
         return (
@@ -118,6 +120,8 @@ class CommandProcessor:
             f"Live next: {live_review_next}\n"
             f"EC2 rehearsal: {ec2_rehearsal.get('rehearsal_status', '-')}\n"
             f"Rehearsal next: {rehearsal_next}\n"
+            f"Operator packet: {operator_packet.get('status', '-')}\n"
+            f"Operator next: {operator_packet_next}\n"
             f"Scan count: {status.get('scan_count', '-')}\n"
             f"Cycle sec: {status.get('duration_sec', '-')}\n"
             f"Open positions: {summary.get('open_positions', 0)}\n"
