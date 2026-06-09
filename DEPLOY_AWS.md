@@ -199,6 +199,7 @@ cd ~/shadow-v8
 git pull --ff-only
 set -a && source .env && set +a
 python -m shadow_v8.tools.ec2_prelive_sequence_report --symbols ETHUSDT,BTCUSDT --compact
+python -m shadow_v8.tools.bybit_live_go_no_go_report --symbols ETHUSDT,BTCUSDT --compact
 python -m shadow_v8.tools.ec2_prelive_validation_audit --symbols ETHUSDT,BTCUSDT --compact
 ```
 
@@ -206,6 +207,7 @@ For the read-only private validation step, run:
 
 ```bash
 python -m shadow_v8.tools.ec2_prelive_sequence_report --symbols ETHUSDT,BTCUSDT --execute-private-validation --compact
+python -m shadow_v8.tools.bybit_live_go_no_go_report --symbols ETHUSDT,BTCUSDT --execute-private-validation --compact
 python -m shadow_v8.tools.ec2_prelive_validation_audit --symbols ETHUSDT,BTCUSDT --execute-private-validation --compact
 ```
 
@@ -215,8 +217,13 @@ does not set the live-unlock environment variable:
 
 ```bash
 python -m shadow_v8.tools.ec2_prelive_sequence_report --symbols ETHUSDT,BTCUSDT --execute-private-validation --dashboard-token-rotated --compact
+python -m shadow_v8.tools.bybit_live_go_no_go_report --symbols ETHUSDT,BTCUSDT --execute-private-validation --dashboard-token-rotated --compact
 python -m shadow_v8.tools.bybit_live_unlock_review --symbols ETHUSDT,BTCUSDT --execute-private-validation --dashboard-token-rotated --compact
 ```
+
+Use the go/no-go report as the final readable operator summary. It should say
+`READY_FOR_OPERATOR_GO_NO_GO_REVIEW` before any manual live-unlock change is
+considered. The report is still validate-only and does not place orders.
 
 Keep `SHADOW_LIVE_UNLOCK_BROKERS` empty until the final live-review step.
 Rotate `DASHBOARD_TOKEN` before live trading because an earlier dashboard token
