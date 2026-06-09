@@ -221,14 +221,16 @@ does not set the live-unlock environment variable:
 python -m shadow_v8.tools.ec2_prelive_sequence_report --symbols ETHUSDT,BTCUSDT --execute-private-validation --dashboard-token-rotated --compact
 python -m shadow_v8.tools.bybit_live_go_no_go_report --symbols ETHUSDT,BTCUSDT --execute-private-validation --dashboard-token-rotated --compact
 python -m shadow_v8.tools.ec2_prelive_rehearsal --symbols ETHUSDT,BTCUSDT --execute-private-validation --dashboard-token-rotated --compact
+python -m shadow_v8.tools.bybit_operator_go_no_go_checklist --symbols ETHUSDT,BTCUSDT --execute-private-validation --dashboard-token-rotated --compact
 python -m shadow_v8.tools.bybit_live_unlock_review --symbols ETHUSDT,BTCUSDT --execute-private-validation --dashboard-token-rotated --compact
 ```
 
 Use the rehearsal and go/no-go reports as the final readable operator summaries.
 The rehearsal should say `REHEARSAL_READY_FOR_OPERATOR_REVIEW` and the go/no-go
 report should say `READY_FOR_OPERATOR_GO_NO_GO_REVIEW` before any manual
-live-unlock change is considered. These reports are still validate-only and do
-not place orders.
+live-unlock change is considered. The operator checklist should say
+`READY_FOR_FINAL_OPERATOR_CHECKLIST` and should be treated as the final manual
+review sheet. These reports are still validate-only and do not place orders.
 
 Keep `SHADOW_LIVE_UNLOCK_BROKERS` empty until the final live-review step.
 Rotate `DASHBOARD_TOKEN` before live trading because an earlier dashboard token
