@@ -93,6 +93,7 @@ class DashboardWriter:
         execution_readiness: dict[str, Any] | None = None,
         bybit_private_validation: dict[str, Any] | None = None,
         bybit_live_unlock_review: dict[str, Any] | None = None,
+        ec2_prelive_rehearsal: dict[str, Any] | None = None,
         errors: list[str] | None = None,
     ) -> None:
         self._write_json(
@@ -110,6 +111,7 @@ class DashboardWriter:
                 "execution_readiness": execution_readiness or {},
                 "bybit_private_validation": bybit_private_validation or {},
                 "bybit_live_unlock_review": bybit_live_unlock_review or {},
+                "ec2_prelive_rehearsal": ec2_prelive_rehearsal or {},
                 "health": "OK" if not errors else "WARN",
                 "errors": errors or [],
             },
