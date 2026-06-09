@@ -59,6 +59,7 @@ from shadow_v8.telemetry.telegram_alerts import TelegramAlerts
 from shadow_v8.telemetry.research_logger import ResearchLogger
 from shadow_v8.tools.bybit_live_unlock_review import build_bybit_live_unlock_review
 from shadow_v8.tools.bybit_private_validation_runbook import build_bybit_private_validation_runbook
+from shadow_v8.tools.ec2_prelive_rehearsal import build_ec2_prelive_rehearsal
 
 
 def _demo_candles(count: int = 120, start: float = 100.0) -> list[Candle]:
@@ -140,6 +141,7 @@ def main() -> None:
             execution_readiness=_execution_readiness_status(router),
             bybit_private_validation=_bybit_private_validation_status(),
             bybit_live_unlock_review=_bybit_live_unlock_review_status(),
+            ec2_prelive_rehearsal=_ec2_prelive_rehearsal_status(),
             errors=errors,
         )
         alerts.engine_warning(errors)
@@ -444,6 +446,44 @@ def _bybit_live_unlock_review_status() -> dict:
         "symbols": list(report.get("symbols") or symbols),
         "top_blocker": blockers[0] if blockers else "none",
         "next_action": next_actions[0] if next_actions else "none",
+    }
+
+
+def _ec2_prelive_rehearsal_status() -> dict:
+    symbols = [asset.symbol for asset in enabled_assets() if asset.broker == "bybit"][:6] or ["ETHUSDT"]
+    try:
+        report = build_ec2_prelive_rehearsal(
+            symbols=symbols,
+            execute_private_validation=False,
+            fetch_public_instrument=False,
+        )
+    except Exception as exc:
+        return {
+            "mode": "ec2_prelive_rehearsal_validate_only",
+            "rehearsal_status": "STATUS_ERROR",
+            "ok": False,
+            "live_orders_enabled": False,
+            "safe_to_enable_live": False,
+            "manual_live_unlock_required": True,
+            "next_action": "inspect_ec2_rehearsal_status_error",
+            "top_blocker": f"{type(exc).__name__}: {exc}",
+            "symbols": symbols,
+        }
+
+    go_no_go = report.get("go_no_go") or {}
+    blockers = [str(item) for item in go_no_go.get("hard_blockers") or []]
+    operator_steps = [str(item) for item in report.get("operator_must_do") or []]
+    return {
+        "mode": report.get("mode"),
+        "rehearsal_status": report.get("rehearsal_status"),
+        "ok": bool(report.get("ok")),
+        "live_orders_enabled": bool(report.get("live_orders_enabled")),
+        "safe_to_enable_live": bool(report.get("safe_to_enable_live")),
+        "manual_live_unlock_required": bool(report.get("manual_live_unlock_required")),
+        "symbols": list(report.get("symbols") or symbols),
+        "top_blocker": blockers[0] if blockers else "none",
+        "next_action": report.get("next_command") or (operator_steps[0] if operator_steps else "none"),
+        "operator_must_do": operator_steps[:4],
     }
 
 
