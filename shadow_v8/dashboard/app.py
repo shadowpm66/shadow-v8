@@ -339,6 +339,9 @@ def _engine_card(status: dict[str, Any]) -> str:
     ec2_rehearsal = status.get("ec2_prelive_rehearsal") or {}
     ec2_rehearsal_status = ec2_rehearsal.get("rehearsal_status") or "-"
     ec2_rehearsal_next = ec2_rehearsal.get("next_action") or ec2_rehearsal.get("top_blocker") or "-"
+    operator_packet = status.get("bybit_prelive_operator_packet") or {}
+    operator_packet_status = operator_packet.get("status") or "-"
+    operator_packet_next = operator_packet.get("next_action") or operator_packet.get("top_blocker") or "-"
     return f"""
       <section class="card">
         <h2>Engine</h2>
@@ -360,6 +363,8 @@ def _engine_card(status: dict[str, Any]) -> str:
           <dt>Live next</dt><dd>{_e(bybit_live_next)}</dd>
           <dt>EC2 rehearsal</dt><dd>{_e(ec2_rehearsal_status)}</dd>
           <dt>Rehearsal next</dt><dd>{_e(ec2_rehearsal_next)}</dd>
+          <dt>Operator packet</dt><dd>{_e(operator_packet_status)}</dd>
+          <dt>Operator next</dt><dd>{_e(operator_packet_next)}</dd>
           <dt>Scan count</dt><dd>{_e(scan_count)}</dd>
           <dt>Cycle sec</dt><dd>{_e(duration)}</dd>
         </dl>

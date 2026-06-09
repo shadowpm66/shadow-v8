@@ -58,6 +58,7 @@ from shadow_v8.telemetry.dashboard_writer import DashboardWriter
 from shadow_v8.telemetry.telegram_alerts import TelegramAlerts
 from shadow_v8.telemetry.research_logger import ResearchLogger
 from shadow_v8.tools.bybit_live_unlock_review import build_bybit_live_unlock_review
+from shadow_v8.tools.bybit_prelive_operator_packet import build_bybit_prelive_operator_packet
 from shadow_v8.tools.bybit_private_validation_runbook import build_bybit_private_validation_runbook
 from shadow_v8.tools.ec2_prelive_rehearsal import build_ec2_prelive_rehearsal
 
@@ -142,6 +143,7 @@ def main() -> None:
             bybit_private_validation=_bybit_private_validation_status(),
             bybit_live_unlock_review=_bybit_live_unlock_review_status(),
             ec2_prelive_rehearsal=_ec2_prelive_rehearsal_status(),
+            bybit_prelive_operator_packet=_bybit_prelive_operator_packet_status(),
             errors=errors,
         )
         alerts.engine_warning(errors)
@@ -484,6 +486,46 @@ def _ec2_prelive_rehearsal_status() -> dict:
         "top_blocker": blockers[0] if blockers else "none",
         "next_action": report.get("next_command") or (operator_steps[0] if operator_steps else "none"),
         "operator_must_do": operator_steps[:4],
+    }
+
+
+def _bybit_prelive_operator_packet_status() -> dict:
+    symbols = [asset.symbol for asset in enabled_assets() if asset.broker == "bybit"][:6] or ["ETHUSDT"]
+    try:
+        packet = build_bybit_prelive_operator_packet(
+            symbols=symbols,
+            execute_private_validation=False,
+            fetch_public_instrument=False,
+        )
+    except Exception as exc:
+        return {
+            "mode": "bybit_prelive_operator_packet_validate_only",
+            "status": "PACKET_STATUS_ERROR",
+            "ok": False,
+            "live_orders_enabled": False,
+            "safe_to_enable_live": False,
+            "manual_operator_approval_required": True,
+            "manual_live_unlock_required": True,
+            "symbols": symbols,
+            "top_blocker": f"{type(exc).__name__}: {exc}",
+            "next_action": "inspect_bybit_operator_packet_status_error",
+        }
+
+    blockers = [str(item) for item in packet.get("blockers") or []]
+    manual = [str(item) for item in packet.get("manual_confirmations") or []]
+    return {
+        "mode": packet.get("mode"),
+        "status": packet.get("status"),
+        "ok": bool(packet.get("ok")),
+        "live_orders_enabled": bool(packet.get("live_orders_enabled")),
+        "safe_to_enable_live": bool(packet.get("safe_to_enable_live")),
+        "manual_operator_approval_required": bool(packet.get("manual_operator_approval_required")),
+        "manual_live_unlock_required": bool(packet.get("manual_live_unlock_required")),
+        "symbols": list(packet.get("symbols") or symbols),
+        "top_blocker": blockers[0] if blockers else "none",
+        "next_action": packet.get("next_command") or (manual[0] if manual else "none"),
+        "manual_confirmations": manual[:5],
+        "blocker_count": len(blockers),
     }
 
 
