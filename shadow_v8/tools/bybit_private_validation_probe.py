@@ -14,6 +14,7 @@ from shadow_v8.execution.bybit_order_manager import BybitOrderManager
 
 PRIVATE_VALIDATION_PATH = "/v5/account/wallet-balance"
 PRIVATE_VALIDATION_PARAMS = {"accountType": "UNIFIED"}
+MAX_SAFE_MESSAGE_LEN = 180
 
 
 def _requests_get(url: str, *, params: Mapping[str, Any], headers: Mapping[str, str], timeout: int) -> Any:
@@ -44,6 +45,7 @@ def _signed_get_headers(
 
 def _sanitize_private_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
     result = payload.get("result") if isinstance(payload, Mapping) else None
+    ret_ext_info = payload.get("retExtInfo")
     rows = (result or {}).get("list") if isinstance(result, Mapping) else []
     coin_count = 0
     account_types: list[str] = []
@@ -59,11 +61,53 @@ def _sanitize_private_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "ret_code": payload.get("retCode"),
         "ret_msg": payload.get("retMsg"),
+        "body_kind": "json",
+        "ret_ext_info_present": ret_ext_info not in (None, {}, []),
         "result_present": isinstance(result, Mapping),
         "account_types": sorted(set(account_types)),
         "account_count": len(rows) if isinstance(rows, list) else 0,
         "coin_count": coin_count,
     }
+
+
+def _safe_text(value: Any) -> str | None:
+    if value in (None, ""):
+        return None
+    text = str(value).replace("\r", " ").replace("\n", " ").strip()
+    if len(text) > MAX_SAFE_MESSAGE_LEN:
+        return text[:MAX_SAFE_MESSAGE_LEN] + "...truncated"
+    return text
+
+
+def _sanitize_private_error(exc: Exception) -> dict[str, Any]:
+    response = getattr(exc, "response", None)
+    status_code = getattr(response, "status_code", None)
+    reason = _safe_text(getattr(response, "reason", None))
+    payload: Any = None
+    payload_mapping = False
+    body_kind = "none"
+    if response is not None:
+        try:
+            payload = response.json()
+        except Exception:  # noqa: BLE001 - intentionally report only safe shape metadata.
+            payload = None
+        payload_mapping = isinstance(payload, Mapping)
+        body_kind = "json" if payload_mapping else "text" if getattr(response, "text", "") else "empty"
+
+    diagnostic = {
+        "error_type": type(exc).__name__,
+        "http_status": status_code,
+        "http_reason": reason,
+        "body_kind": body_kind,
+        "bybit_ret_code": payload.get("retCode") if payload_mapping else None,
+        "bybit_ret_msg": _safe_text(payload.get("retMsg")) if payload_mapping else None,
+        "bybit_ret_ext_info_present": payload.get("retExtInfo") not in (None, {}, []) if payload_mapping else False,
+        "bybit_result_present": isinstance(payload.get("result"), Mapping) if payload_mapping else False,
+        "response_json_present": payload_mapping,
+        "response_text_present": bool(getattr(response, "text", "")) if response is not None else False,
+        "sanitized": True,
+    }
+    return {key: value for key, value in diagnostic.items() if value not in (None, "")}
 
 
 def build_bybit_private_validation_probe(
@@ -114,7 +158,7 @@ def build_bybit_private_validation_probe(
                 if payload.get("retCode") != 0:
                     blockers.append("private_validation_ret_code_nonzero")
             except Exception as exc:  # noqa: BLE001 - sanitized operator probe output.
-                private_result = {"error_type": type(exc).__name__}
+                private_result = _sanitize_private_error(exc)
                 blockers.append("private_validation_request_failed")
 
     credentials_present = bool(config.get("credentials_present"))
@@ -176,6 +220,20 @@ def compact_lines(report: Mapping[str, Any]) -> list[str]:
     ]
     if private_result:
         lines.append(f"Private retCode: {private_result.get('ret_code', '-')}")
+        if "body_kind" in private_result:
+            lines.append(f"Private body kind: {private_result.get('body_kind', '-')}")
+        if "ret_ext_info_present" in private_result:
+            lines.append(f"Private retExtInfo present: {private_result.get('ret_ext_info_present', '-')}")
+        if "bybit_ret_code" in private_result:
+            lines.append(f"Private Bybit retCode: {private_result.get('bybit_ret_code', '-')}")
+        if "bybit_ret_msg" in private_result:
+            lines.append(f"Private Bybit retMsg: {private_result.get('bybit_ret_msg', '-')}")
+        if "bybit_ret_ext_info_present" in private_result:
+            lines.append(f"Private Bybit retExtInfo present: {private_result.get('bybit_ret_ext_info_present', '-')}")
+        if "http_status" in private_result:
+            lines.append(f"Private HTTP status: {private_result.get('http_status', '-')}")
+        if "error_type" in private_result:
+            lines.append(f"Private error type: {private_result.get('error_type', '-')}")
         lines.append(f"Private result present: {private_result.get('result_present', '-')}")
         lines.append(f"Private account count: {private_result.get('account_count', '-')}")
         lines.append(f"Private coin count: {private_result.get('coin_count', '-')}")
